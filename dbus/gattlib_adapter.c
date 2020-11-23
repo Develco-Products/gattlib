@@ -83,6 +83,13 @@ struct gattlib_adapter *init_default_adapter(void) {
 	}
 }
 
+char * gattlib_adapter_get_address(void* adapter) {
+	struct gattlib_adapter *gattlib_adapter = adapter;
+
+	return org_bluez_adapter1_get_address(gattlib_adapter->adapter_proxy);
+}
+
+
 GDBusObjectManager *get_device_manager_from_adapter(struct gattlib_adapter *gattlib_adapter) {
 	GError *error = NULL;
 
@@ -337,7 +344,8 @@ int gattlib_adapter_close(void* adapter)
 {
 	struct gattlib_adapter *gattlib_adapter = adapter;
 
-	g_object_unref(gattlib_adapter->device_manager);
+	if(gattlib_adapter->device_manager != NULL)
+		g_object_unref(gattlib_adapter->device_manager);
 	g_object_unref(gattlib_adapter->adapter_proxy);
 	free(gattlib_adapter);
 
