@@ -41,7 +41,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Show all the warnings
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ggdb -Wall")
 # Expose 'gattlib.h' to all sub-directories
 include_directories(include)
 
