@@ -632,6 +632,34 @@ int gattlib_get_rssi(gatt_connection_t *connection, int16_t *rssi);
 int gattlib_get_rssi_from_mac(void *adapter, const char *mac_address, int16_t *rssi);
 
 /**
+ * @brief Function to retrieve Advertising Flags from a MAC Address
+ *
+ * @note: This function uses an experimental D-Bus API
+ *
+ * @param adapter is the adapter the new device has been seen
+ * @param mac_address is the MAC address of the device to get the RSSI
+ * @param flags is the flags from the devices AD entry with type 0x01
+ *
+ * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
+ */
+int gattlib_get_advertising_flags_from_mac(void *adapter, const char *mac_address, char *flags);
+
+/**
+ * @brief Function to retrieve raw Advertising Data from a MAC Address
+ *
+ * @note: This function uses an experimental D-Bus API
+ *
+ * @param adapter is the adapter the new device has been seen
+ * @param mac_address is the MAC address of the device to get the RSSI
+ * @param out is the buffer that the AD entries are packed into
+ * @param out_size is the size of AD entries added to out
+ * @param max_out is the maximum size added to out
+ *
+ * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
+ */
+int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, char *out, size_t *out_size, size_t max_out);
+
+/**
  * @brief Function to retrieve Advertisement Data from a MAC Address
  *
  * @param connection Active GATT connection

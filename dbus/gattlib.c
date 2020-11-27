@@ -853,3 +853,93 @@ int gattlib_get_rssi_from_mac(void *adapter, const char *mac_address, int16_t *r
 	g_object_unref(bluez_device1);
 	return GATTLIB_SUCCESS;
 }
+
+int gattlib_get_advertising_flags_from_mac(void *adapter, const char *mac_address, char *flags)
+{
+	OrgBluezDevice1 *bluez_device1;
+	int ret;
+
+	if (flags == NULL) {
+		return GATTLIB_INVALID_PARAMETER;
+	}
+
+	ret = get_bluez_device_from_mac(adapter, mac_address, &bluez_device1);
+	if (ret != GATTLIB_SUCCESS) {
+		g_object_unref(bluez_device1);
+		return ret;
+	}
+
+	GVariant *device_flags = org_bluez_device1_get_advertising_flags(bluez_device1);
+	if(device_flags != NULL)
+	{
+		gsize flag_size;
+		const guint8* flags_data = g_variant_get_fixed_array(device_flags, &flag_size, sizeof(guint8));
+		if(flag_size == 1)
+		{
+			*flags = *flags_data;
+		}
+		else
+		{
+			ret = GATTLIB_NOT_FOUND;
+		}
+	}
+	else
+	{
+		ret = GATTLIB_NOT_FOUND;
+	}
+
+	g_object_unref(bluez_device1);
+	return ret;
+}
+
+int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, char *out, size_t *out_size, size_t max_out)
+{
+	OrgBluezDevice1 *bluez_device1;
+	int ret;
+
+	if (out == NULL && max_out != 0) {
+		return GATTLIB_INVALID_PARAMETER;
+	}
+	*out_size = 0;
+
+	ret = get_bluez_device_from_mac(adapter, mac_address, &bluez_device1);
+	if (ret != GATTLIB_SUCCESS) {
+		g_object_unref(bluez_device1);
+		return ret;
+	}
+
+	GVariant *ad_list= org_bluez_device1_get_advertising_data(bluez_device1);
+	if(ad_list != NULL)
+	{
+		GVariantIter ad_iter;
+		gchar ad_type;
+		GVariant *ad_val;
+
+		g_variant_iter_init(&ad_iter, ad_list);
+		while(g_variant_iter_loop(&ad_iter, "{yv}", &ad_type, &ad_val))
+		{
+			gsize ad_size;
+			const guint8* ad_data = g_variant_get_fixed_array(ad_val, &ad_size, sizeof(guint8));
+
+			if(max_out < sizeof(uint8_t)+sizeof(uint8_t)+ad_size)
+			{
+				ret = GATTLIB_OUT_OF_MEMORY;
+				goto CLEANUP;
+			}
+
+			out[(*out_size)++] = ad_size+1;
+			out[(*out_size)++] = ad_type;
+			memcpy(&out[*out_size], ad_data, ad_size);
+			(*out_size) += ad_size;
+		}
+	}
+	else
+	{
+		ret = GATTLIB_NOT_FOUND;
+	}
+
+CLEANUP:
+	g_object_unref(bluez_device1);
+	return ret;
+}
+

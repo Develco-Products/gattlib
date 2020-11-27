@@ -38,6 +38,14 @@
 		<!-- Was available until Bluez v5.37 to expose the list of available org.bluez.GattService1 -->
 		<property name="GattServices" type="ao" access="read"></property>
 
+		<!--EXPERIMENTAL-->
+		<property name="AdvertisingFlags" type="ay" access="read">
+			<annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+		</property>
+
+		<!--EXPERIMENTAL-->
+		<property name="AdvertisingData" type="a{yv}" access="read"></property>
+
 		<signal name="PropertiesChanged">
 			<arg name="interface" type="s"/>
 			<arg name="changed_properties" type="a{sv}"/>
