@@ -232,7 +232,7 @@ int gattlib_adapter_open(const char* adapter_name, void** adapter);
  *
  * @return adapters bluetooth address on success or NULL on error
  */
-char *gattlib_adapter_get_address(void* adapter);
+const char *gattlib_adapter_get_address(void* adapter);
 
 /**
  * @brief Enable Bluetooth scanning on a given adapter

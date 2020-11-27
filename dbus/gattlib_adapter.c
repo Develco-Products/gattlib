@@ -83,7 +83,7 @@ struct gattlib_adapter *init_default_adapter(void) {
 	}
 }
 
-char * gattlib_adapter_get_address(void* adapter) {
+const char * gattlib_adapter_get_address(void* adapter) {
 	struct gattlib_adapter *gattlib_adapter = adapter;
 
 	return org_bluez_adapter1_get_address(gattlib_adapter->adapter_proxy);
