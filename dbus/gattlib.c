@@ -818,6 +818,25 @@ int get_bluez_device_from_mac(struct gattlib_adapter *adapter, const char *mac_a
 	return GATTLIB_SUCCESS;
 }
 
+bool gattlib_is_public_address_type_from_mac(void *adapter, const char *mac_address)
+{
+	OrgBluezDevice1 *bluez_device1;
+	const char *address_type;
+	int ret;
+
+	ret = get_bluez_device_from_mac(adapter, mac_address, &bluez_device1);
+	if (ret != GATTLIB_SUCCESS) {
+		g_object_unref(bluez_device1);
+		return FALSE;
+	}
+
+	address_type = org_bluez_device1_get_address_type(bluez_device1);
+	bool is_public_addr = address_type != NULL && 0 == strcmp(address_type, "public");
+
+	g_object_unref(bluez_device1);
+	return is_public_addr;
+}
+
 #if 0 // Disable until https://github.com/labapart/gattlib/issues/75 is resolved
 int gattlib_get_rssi(gatt_connection_t *connection, int16_t *rssi)
 {

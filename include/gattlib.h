@@ -29,6 +29,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/sdp.h>
@@ -604,6 +605,16 @@ void gattlib_register_notification(gatt_connection_t* connection, gattlib_event_
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 void gattlib_register_indication(gatt_connection_t* connection, gattlib_event_handler_t indication_handler, void* user_data);
+
+/*
+ * @brief Checks whether the device has a public or randomly assigned address
+ *
+ * @param adapter is the adapter to where the device has been seen
+ * @param mac_address is the MAC address of the device to look up
+ *
+ * @return TRUE if device has a public address. FALSE on error, or if device has randomly assigned address
+ */
+bool gattlib_is_public_address_type_from_mac(void *adapter, const char *mac_address);
 
 #if 0 // Disable until https://github.com/labapart/gattlib/issues/75 is resolved
 /**
