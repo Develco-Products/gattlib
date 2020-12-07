@@ -668,7 +668,7 @@ int gattlib_get_advertising_flags_from_mac(void *adapter, const char *mac_addres
  *
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
-int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, char *out, size_t *out_size, size_t max_out);
+int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, uint8_t *out, size_t *out_size, size_t max_out);
 
 /**
  * @brief Function to retrieve Advertisement Data from a MAC Address

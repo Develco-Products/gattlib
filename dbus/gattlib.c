@@ -911,7 +911,7 @@ int gattlib_get_advertising_flags_from_mac(void *adapter, const char *mac_addres
 	return ret;
 }
 
-int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, char *out, size_t *out_size, size_t max_out)
+int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_address, uint8_t *out, size_t *out_size, size_t max_out)
 {
 	OrgBluezDevice1 *bluez_device1;
 	int ret;
@@ -927,7 +927,7 @@ int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_add
 		return ret;
 	}
 
-	GVariant *ad_list= org_bluez_device1_get_advertising_data(bluez_device1);
+	GVariant *ad_list = org_bluez_device1_get_advertising_data(bluez_device1);
 	if(ad_list != NULL)
 	{
 		GVariantIter ad_iter;
