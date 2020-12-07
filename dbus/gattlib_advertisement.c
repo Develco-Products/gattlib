@@ -81,6 +81,8 @@ int get_advertisement_data_from_device(OrgBluezDevice1 *bluez_device1,
 			g_variant_get(value, "y", &(*manufacturer_data)[index++]);
 			g_variant_unref(value);
 		}
+		g_variant_unref(manufacturer_data_dict);
+		g_variant_unref(values);
 		g_variant_iter_free(iter);
 	}
 

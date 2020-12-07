@@ -7,10 +7,10 @@
 #define BLE_SCAN_TIMEOUT   60
 
 static void ble_advertising_device(void *adapter, const char* addr, const char* name, void *user_data) {
-	gattlib_advertisement_data_t *advertisement_data;
+	gattlib_advertisement_data_t *advertisement_data = NULL;
 	size_t advertisement_data_count;
 	uint16_t manufacturer_id;
-	uint8_t *manufacturer_data;
+	uint8_t *manufacturer_data = NULL;
 	size_t manufacturer_data_size;
 	int ret;
 
@@ -31,6 +31,16 @@ static void ble_advertising_device(void *adapter, const char* addr, const char* 
 		printf("%02x ", manufacturer_data[i]);
 	}
 	printf("\n");
+
+	for (size_t i = 0; i < advertisement_data_count; i++)
+	{
+		free(advertisement_data[i].data);
+	}
+
+	if(advertisement_data)
+		free(advertisement_data);
+	if(manufacturer_data)
+		free(manufacturer_data);
 }
 
 int main(int argc, const char *argv[]) {
@@ -58,7 +68,7 @@ int main(int argc, const char *argv[]) {
 			0 /* RSSI Threshold */,
 			GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE, /* Notify change of advertising data/RSSI */
 			ble_advertising_device,
-			0, /* timeout=0 means infinite loop */
+			10, /* timeout=0 means infinite loop */
 			NULL /* user_data */);
 	if (ret) {
 		fprintf(stderr, "ERROR: Failed to scan.\n");
