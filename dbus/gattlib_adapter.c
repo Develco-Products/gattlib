@@ -238,6 +238,13 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 		g_variant_builder_add(&arg_properties_builder, "{sv}", "RSSI", rssi_variant);
 	}
 
+	GVariant *transport_type = g_variant_new_string("le");
+	g_variant_builder_add(&arg_properties_builder, "{sv}", "Transport", transport_type);
+
+
+	GVariant *duplicate_data = g_variant_new_boolean(true);
+	g_variant_builder_add(&arg_properties_builder, "{sv}", "DuplicateData", duplicate_data);
+
 	org_bluez_adapter1_call_set_discovery_filter_sync(gattlib_adapter->adapter_proxy,
 			g_variant_builder_end(&arg_properties_builder), NULL, &error);
 
