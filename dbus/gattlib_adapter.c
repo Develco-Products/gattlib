@@ -152,22 +152,27 @@ static void device_manager_on_device1_signal(const char* device1_path, struct di
 	if (device1) {
 		const gchar *address = org_bluez_device1_get_address(device1);
 
-		// Check if the device is already part of the list
-		GSList *item = g_slist_find_custom(*arg->discovered_devices_ptr, address, (GCompareFunc)g_ascii_strcasecmp);
+		if(address != NULL) {
+			// Check if the device is already part of the list
+			GSList *item = g_slist_find_custom(*arg->discovered_devices_ptr, address, (GCompareFunc)g_ascii_strcasecmp);
 
-		// First time this device is in the list
-		if (item == NULL) {
-			// Add the device to the list
-			*arg->discovered_devices_ptr = g_slist_append(*arg->discovered_devices_ptr, g_strdup(address));
+			// First time this device is in the list
+			if (item == NULL) {
+				// Add the device to the list
+				*arg->discovered_devices_ptr = g_slist_append(*arg->discovered_devices_ptr, g_strdup(address));
+			}
+
+			if ((item == NULL) || (arg->enabled_filters & GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE)) {
+				arg->callback(
+					arg->adapter,
+					org_bluez_device1_get_address(device1),
+					org_bluez_device1_get_name(device1),
+					arg->user_data);
+			}
+		} else {
+			fprintf(stderr, "Failed to get address for path: %s\n", device1_path);
 		}
 
-		if ((item == NULL) || (arg->enabled_filters & GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE)) {
-			arg->callback(
-				arg->adapter,
-				org_bluez_device1_get_address(device1),
-				org_bluez_device1_get_name(device1),
-				arg->user_data);
-		}
 		g_object_unref(device1);
 	}
 }
