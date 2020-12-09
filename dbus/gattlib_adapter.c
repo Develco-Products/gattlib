@@ -83,6 +83,13 @@ struct gattlib_adapter *init_default_adapter(void) {
 	}
 }
 
+const char * gattlib_adapter_get_address(void* adapter) {
+	struct gattlib_adapter *gattlib_adapter = adapter;
+
+	return org_bluez_adapter1_get_address(gattlib_adapter->adapter_proxy);
+}
+
+
 GDBusObjectManager *get_device_manager_from_adapter(struct gattlib_adapter *gattlib_adapter) {
 	GError *error = NULL;
 
@@ -145,22 +152,27 @@ static void device_manager_on_device1_signal(const char* device1_path, struct di
 	if (device1) {
 		const gchar *address = org_bluez_device1_get_address(device1);
 
-		// Check if the device is already part of the list
-		GSList *item = g_slist_find_custom(*arg->discovered_devices_ptr, address, (GCompareFunc)g_ascii_strcasecmp);
+		if(address != NULL) {
+			// Check if the device is already part of the list
+			GSList *item = g_slist_find_custom(*arg->discovered_devices_ptr, address, (GCompareFunc)g_ascii_strcasecmp);
 
-		// First time this device is in the list
-		if (item == NULL) {
-			// Add the device to the list
-			*arg->discovered_devices_ptr = g_slist_append(*arg->discovered_devices_ptr, g_strdup(address));
+			// First time this device is in the list
+			if (item == NULL) {
+				// Add the device to the list
+				*arg->discovered_devices_ptr = g_slist_append(*arg->discovered_devices_ptr, g_strdup(address));
+			}
+
+			if ((item == NULL) || (arg->enabled_filters & GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE)) {
+				arg->callback(
+					arg->adapter,
+					org_bluez_device1_get_address(device1),
+					org_bluez_device1_get_name(device1),
+					arg->user_data);
+			}
+		} else {
+			fprintf(stderr, "Failed to get address for path: %s\n", device1_path);
 		}
 
-		if ((item == NULL) || (arg->enabled_filters & GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE)) {
-			arg->callback(
-				arg->adapter,
-				org_bluez_device1_get_address(device1),
-				org_bluez_device1_get_name(device1),
-				arg->user_data);
-		}
 		g_object_unref(device1);
 	}
 }
@@ -230,6 +242,13 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 		GVariant *rssi_variant = g_variant_new_int16(rssi_threshold);
 		g_variant_builder_add(&arg_properties_builder, "{sv}", "RSSI", rssi_variant);
 	}
+
+	GVariant *transport_type = g_variant_new_string("le");
+	g_variant_builder_add(&arg_properties_builder, "{sv}", "Transport", transport_type);
+
+
+	GVariant *duplicate_data = g_variant_new_boolean(true);
+	g_variant_builder_add(&arg_properties_builder, "{sv}", "DuplicateData", duplicate_data);
 
 	org_bluez_adapter1_call_set_discovery_filter_sync(gattlib_adapter->adapter_proxy,
 			g_variant_builder_end(&arg_properties_builder), NULL, &error);
@@ -345,8 +364,11 @@ int gattlib_adapter_close(void* adapter)
 {
 	struct gattlib_adapter *gattlib_adapter = adapter;
 
-	g_object_unref(gattlib_adapter->device_manager);
+	if(gattlib_adapter->device_manager != NULL)
+		g_object_unref(gattlib_adapter->device_manager);
 	g_object_unref(gattlib_adapter->adapter_proxy);
+	if(gattlib_adapter->adapter_name != NULL)
+		free(gattlib_adapter->adapter_name);
 	free(gattlib_adapter);
 
 	return GATTLIB_SUCCESS;
