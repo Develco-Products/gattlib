@@ -210,15 +210,11 @@ on_interface_proxy_properties_changed (GDBusObjectManagerClient *device_manager,
 	device_manager_on_device1_signal(g_dbus_proxy_get_object_path(interface_proxy), user_data);
 }
 
-int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, int16_t rssi_threshold, uint32_t enabled_filters,
-		gattlib_discovered_device_t discovered_device_cb, size_t timeout, void *user_data)
+int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, int16_t rssi_threshold, uint32_t enabled_filters)
 {
 	struct gattlib_adapter *gattlib_adapter = adapter;
-	GDBusObjectManager *device_manager;
 	GError *error = NULL;
 	int ret = GATTLIB_SUCCESS;
-	int added_signal_id, changed_signal_id;
-	GSList *discovered_devices = NULL;
 	GVariantBuilder arg_properties_builder;
 	GVariant *rssi_variant = NULL;
 
@@ -246,7 +242,6 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 	GVariant *transport_type = g_variant_new_string("le");
 	g_variant_builder_add(&arg_properties_builder, "{sv}", "Transport", transport_type);
 
-
 	GVariant *duplicate_data = g_variant_new_boolean(true);
 	g_variant_builder_add(&arg_properties_builder, "{sv}", "DuplicateData", duplicate_data);
 
@@ -264,6 +259,33 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 		return GATTLIB_ERROR_DBUS;
 	}
 
+	// Now, start BLE discovery
+	org_bluez_adapter1_call_start_discovery_sync(gattlib_adapter->adapter_proxy, NULL, &error);
+	if (error) {
+		fprintf(stderr, "Failed to start discovery: %s\n", error->message);
+		g_error_free(error);
+		return GATTLIB_ERROR_DBUS;
+	}
+
+	return ret;
+}
+
+int gattlib_adapter_scan_enable(void* adapter)
+{
+	return gattlib_adapter_scan_enable_with_filter(adapter,
+			NULL, 0 /* RSSI Threshold */,
+			GATTLIB_DISCOVER_FILTER_USE_NONE);
+}
+
+int gattlib_adapter_scan_with_filter(void *adapter, uuid_t **uuid_list, int16_t rssi_threshold, uint32_t enabled_filters,
+		gattlib_discovered_device_t discovered_device_cb, size_t timeout, void *user_data)
+{
+	struct gattlib_adapter *gattlib_adapter = adapter;
+	GDBusObjectManager *device_manager;
+	int ret = GATTLIB_SUCCESS;
+	int added_signal_id, changed_signal_id;
+	GSList *discovered_devices = NULL;
+
 	//
 	// Get notification when objects are removed from the Bluez ObjectManager.
 	// We should get notified when the connection is lost with the target to allow
@@ -271,7 +293,7 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 	//
 	device_manager = get_device_manager_from_adapter(gattlib_adapter);
 	if (device_manager == NULL) {
-		goto DISABLE_SCAN;
+		goto CLEANUP;
 	}
 
 	// Pass the user callback and the discovered device list pointer to the signal handlers
@@ -290,16 +312,13 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 
 	// List for object changes to see if there are still devices around
 	changed_signal_id = g_signal_connect(G_DBUS_OBJECT_MANAGER(device_manager),
-					     "interface-proxy-properties-changed",
-					     G_CALLBACK(on_interface_proxy_properties_changed),
-					     &discovered_device_arg);
+	                    "interface-proxy-properties-changed",
+	                    G_CALLBACK(on_interface_proxy_properties_changed),
+	                    &discovered_device_arg);
 
-	// Now, start BLE discovery
-	org_bluez_adapter1_call_start_discovery_sync(gattlib_adapter->adapter_proxy, NULL, &error);
-	if (error) {
-		fprintf(stderr, "Failed to start discovery: %s\n", error->message);
-		g_error_free(error);
-		return GATTLIB_ERROR_DBUS;
+	ret = gattlib_adapter_scan_enable_with_filter(adapter, uuid_list, rssi_threshold, enabled_filters);
+	if(ret != GATTLIB_SUCCESS) {
+		goto CLEANUP;
 	}
 
 	// Run Glib loop for 'timeout' seconds
@@ -316,19 +335,21 @@ int gattlib_adapter_scan_enable_with_filter(void *adapter, uuid_t **uuid_list, i
 	g_signal_handler_disconnect(G_DBUS_OBJECT_MANAGER(device_manager), added_signal_id);
 	g_signal_handler_disconnect(G_DBUS_OBJECT_MANAGER(device_manager), changed_signal_id);
 
-DISABLE_SCAN:
 	// Stop BLE device discovery
 	gattlib_adapter_scan_disable(adapter);
 
+CLEANUP:
 	// Free discovered device list
-	g_slist_foreach(discovered_devices, (GFunc)g_free, NULL);
-	g_slist_free(discovered_devices);
+	if(discovered_devices != NULL) {
+		g_slist_foreach(discovered_devices, (GFunc)g_free, NULL);
+		g_slist_free(discovered_devices);
+	}
 	return ret;
 }
 
-int gattlib_adapter_scan_enable(void* adapter, gattlib_discovered_device_t discovered_device_cb, size_t timeout, void *user_data)
+int gattlib_adapter_scan(void* adapter, gattlib_discovered_device_t discovered_device_cb, size_t timeout, void *user_data)
 {
-	return gattlib_adapter_scan_enable_with_filter(adapter,
+	return gattlib_adapter_scan_with_filter(adapter,
 			NULL, 0 /* RSSI Threshold */,
 			GATTLIB_DISCOVER_FILTER_USE_NONE,
 			discovered_device_cb, timeout, user_data);
@@ -337,12 +358,15 @@ int gattlib_adapter_scan_enable(void* adapter, gattlib_discovered_device_t disco
 int gattlib_adapter_scan_disable(void* adapter) {
 	struct gattlib_adapter *gattlib_adapter = adapter;
 
+	GError *error = NULL;
+
+	org_bluez_adapter1_call_stop_discovery_sync(gattlib_adapter->adapter_proxy, NULL, &error);
+	// Ignore the error
+	if(error) {
+		g_error_free(error);
+	}
+
 	if (gattlib_adapter->scan_loop) {
-		GError *error = NULL;
-
-		org_bluez_adapter1_call_stop_discovery_sync(gattlib_adapter->adapter_proxy, NULL, &error);
-		// Ignore the error
-
 		// Remove timeout
 		if (gattlib_adapter->timeout_id) {
 			g_source_remove(gattlib_adapter->timeout_id);

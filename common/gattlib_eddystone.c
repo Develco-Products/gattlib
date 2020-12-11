@@ -66,6 +66,6 @@ int gattlib_adapter_scan_eddystone(void *adapter, int16_t rssi_threshold, uint32
 			.user_data = user_data
 	};
 
-	return gattlib_adapter_scan_enable_with_filter(adapter, uuid_filter_list, rssi_threshold, enabled_filters,
+	return gattlib_adapter_scan_with_filter(adapter, uuid_filter_list, rssi_threshold, enabled_filters,
 			on_eddystone_discovered_device, timeout, &callback_data);
 }
