@@ -63,7 +63,7 @@ int main(int argc, const char *argv[]) {
 		return 1;
 	}
 
-	ret = gattlib_adapter_scan_enable_with_filter(adapter,
+	ret = gattlib_adapter_scan_with_filter(adapter,
 			NULL, /* Do not filter on any specific Service UUID */
 			0 /* RSSI Threshold */,
 			GATTLIB_DISCOVER_FILTER_NOTIFY_CHANGE, /* Notify change of advertising data/RSSI */

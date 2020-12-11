@@ -129,7 +129,7 @@ int main(int argc, const char *argv[]) {
 	}
 
 	pthread_mutex_lock(&g_mutex);
-	ret = gattlib_adapter_scan_enable(adapter, ble_discovered_device, BLE_SCAN_TIMEOUT, NULL /* user_data */);
+	ret = gattlib_adapter_scan(adapter, ble_discovered_device, BLE_SCAN_TIMEOUT, NULL /* user_data */);
 	if (ret) {
 		fprintf(stderr, "ERROR: Failed to scan.\n");
 		goto EXIT;
