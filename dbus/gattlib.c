@@ -943,7 +943,7 @@ int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_add
 			if(max_out < sizeof(uint8_t)+sizeof(uint8_t)+ad_size)
 			{
 				ret = GATTLIB_OUT_OF_MEMORY;
-				goto CLEANUP;
+				continue; // if we break out of loop, data is not free'd
 			}
 
 			out[(*out_size)++] = ad_size+1;
@@ -957,7 +957,6 @@ int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_add
 		ret = GATTLIB_NOT_FOUND;
 	}
 
-CLEANUP:
 	g_object_unref(bluez_device1);
 	return ret;
 }
