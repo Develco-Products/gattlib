@@ -16,12 +16,14 @@ static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 LIST_HEAD(listhead, connection_t) g_ble_connections;
 struct connection_t {
 	pthread_t thread;
+	void* adapter;
 	char* addr;
 	LIST_ENTRY(connection_t) entries;
 };
 
 static void *ble_connect_device(void *arg) {
 	struct connection_t *connection = arg;
+	void* adapter = connection->adapter;
 	char* addr = connection->addr;
 	gatt_connection_t* gatt_connection;
 	gattlib_primary_service_t* services;
@@ -34,7 +36,7 @@ static void *ble_connect_device(void *arg) {
 
 	printf("------------START %s ---------------\n", addr);
 
-	gatt_connection = gattlib_connect(NULL, addr, GATTLIB_CONNECTION_OPTIONS_LEGACY_DEFAULT);
+	gatt_connection = gattlib_connect(adapter, addr, GATTLIB_CONNECTION_OPTIONS_LEGACY_DEFAULT);
 	if (gatt_connection == NULL) {
 		fprintf(stderr, "Fail to connect to the bluetooth device.\n");
 		goto connection_exit;
@@ -96,6 +98,7 @@ static void ble_discovered_device(void *adapter, const char* addr, const char* n
 		return;
 	}
 	connection->addr = strdup(addr);
+	connection->adapter = adapter;
 
 	ret = pthread_create(&connection->thread, NULL,	ble_connect_device, connection);
 	if (ret != 0) {
