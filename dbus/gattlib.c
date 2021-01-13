@@ -670,7 +670,7 @@ static void add_characteristics_from_service(gattlib_context_t* conn_context, GD
 
 			characteristic_list[*count].handle = handle;
 			characteristic_list[*count].value_handle = handle;
-
+			characteristic_list[*count].properties = 0;
 			const gchar *const * flags = org_bluez_gatt_characteristic1_get_flags(characteristic);
 			for (; *flags != NULL; flags++) {
 				if (strcmp(*flags,"broadcast") == 0) {
