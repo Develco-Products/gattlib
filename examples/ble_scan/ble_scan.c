@@ -44,7 +44,8 @@ static void *ble_connect_device(void *arg) {
 		puts("Succeeded to connect to the bluetooth device.");
 	}
 
-	ret = gattlib_discover_primary(gatt_connection, &services, &services_count);
+	//ret = gattlib_discover_primary(gatt_connection, &services, &services_count);
+	ret = gattlib_discover_primary_from_mac(adapter, addr, &services, &services_count);
 	if (ret != 0) {
 		fprintf(stderr, "Fail to discover primary services.\n");
 		goto disconnect_exit;
@@ -59,7 +60,8 @@ static void *ble_connect_device(void *arg) {
 	}
 	free(services);
 
-	ret = gattlib_discover_char(gatt_connection, &characteristics, &characteristics_count);
+	// ret = gattlib_discover_char(gatt_connection, &characteristics, &characteristics_count);
+	ret = gattlib_discover_char_from_mac(adapter, addr, &characteristics, &characteristics_count);
 	if (ret != 0) {
 		fprintf(stderr, "Fail to discover characteristics.\n");
 		goto disconnect_exit;

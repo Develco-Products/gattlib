@@ -388,6 +388,265 @@ int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_serv
 	return ret;
 }
 
+int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, gattlib_primary_service_t** services, int* services_count) {
+	GDBusObjectManager *device_manager = get_device_manager_from_adapter(adapter);
+	GList *dbus_objects = g_dbus_object_manager_get_objects(device_manager);
+	GError *error = NULL;
+	int ret = GATTLIB_SUCCESS;
+	OrgBluezDevice1* device;
+	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
+	if(ret != GATTLIB_SUCCESS) {
+		goto FREE_OBJECTS;
+	}
+	gchar *device_object_path;
+	g_object_get(G_OBJECT(device), "g-object-path", &device_object_path, NULL);
+
+	if(!org_bluez_device1_get_services_resolved(device))
+	{
+		ret = GATTLIB_NOT_FOUND;
+		goto FREE_DEVICE;
+	}
+
+	const gchar* const* service_strs = org_bluez_device1_get_uuids(device);
+
+	if (service_strs == NULL) {
+		ret = GATTLIB_NOT_FOUND;
+		goto FREE_DEVICE;
+	}
+
+	// Maximum number of primary services
+	int count_max = 0, count = 0;
+	for (const gchar* const* service_str = service_strs; *service_str != NULL; service_str++) {
+		count_max++;
+	}
+
+	gattlib_primary_service_t* primary_services = malloc(count_max * sizeof(gattlib_primary_service_t));
+	if (primary_services == NULL) {
+		ret = GATTLIB_OUT_OF_MEMORY;
+		goto FREE_DEVICE;
+	}
+
+	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(l->data));
+
+		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattService1");
+		if (!interface) {
+			continue;
+		}
+
+		g_object_unref(interface);
+
+		error = NULL;
+		OrgBluezGattService1* service_proxy = org_bluez_gatt_service1_proxy_new_for_bus_sync(
+				G_BUS_TYPE_SYSTEM,
+				G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+				"org.bluez",
+				object_path,
+				NULL,
+				&error);
+		if (service_proxy == NULL) {
+			if (error) {
+				fprintf(stderr, "Failed to open service '%s': %s\n", object_path, error->message);
+				g_error_free(error);
+			} else {
+				fprintf(stderr, "Failed to open service '%s'.\n", object_path);
+			}
+			continue;
+		}
+
+		// Ensure the service is attached to this device
+		if (strcmp(device_object_path, org_bluez_gatt_service1_get_device(service_proxy))) {
+			g_object_unref(service_proxy);
+			continue;
+		}
+
+		if (org_bluez_gatt_service1_get_primary(service_proxy)) {
+			// Object path is in the form '/org/bluez/hci0/dev_DE_79_A2_A1_E9_FA/service0024'.
+			// We convert the last 4 hex characters into the handle
+			int service_handle;
+			sscanf(object_path + strlen(object_path) - 4, "%x", &service_handle);
+
+			primary_services[count].attr_handle_start = service_handle;
+			primary_services[count].attr_handle_end   = service_handle;
+
+			for (GList *m = dbus_objects; m != NULL; m = m->next)  {
+				const char* characteristic_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(m->data));
+				if (strncmp(object_path, characteristic_path, strlen(object_path)) != 0) {
+					continue;
+				}
+
+				interface = g_dbus_object_manager_get_interface(device_manager, characteristic_path, "org.bluez.GattCharacteristic1");
+				if (!interface) {
+					continue;
+				} else {
+					int char_handle;
+
+					g_object_unref(interface);
+
+					// Object path is in the form '/org/bluez/hci0/dev_DE_79_A2_A1_E9_FA/service0024/char0029'.
+					// We convert the last 4 hex characters into the handle
+					sscanf(characteristic_path + strlen(characteristic_path) - 4, "%x", &char_handle);
+
+					primary_services[count].attr_handle_start = MIN(primary_services[count].attr_handle_start, char_handle);
+					primary_services[count].attr_handle_end   = MAX(primary_services[count].attr_handle_end, char_handle);
+				}
+			}
+
+			gattlib_string_to_uuid(
+					org_bluez_gatt_service1_get_uuid(service_proxy),
+					MAX_LEN_UUID_STR + 1,
+					&primary_services[count].uuid);
+			count++;
+		}
+
+		g_object_unref(service_proxy);
+	}
+
+FREE_DEVICE:
+	g_object_unref(device);
+	g_free(device_object_path);
+FREE_OBJECTS:
+	g_list_free_full(dbus_objects, g_object_unref);
+
+	if(ret != GATTLIB_SUCCESS) {
+		if(primary_services)
+			free(primary_services);
+		*services       = NULL;
+		*services_count = 0;
+	} else {
+		*services       = primary_services;
+		*services_count = count;
+	}
+
+	return ret;
+}
+
+int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattlib_characteristic_t** characteristics, int* characteristics_count) {
+	GDBusObjectManager *device_manager = get_device_manager_from_adapter(adapter);
+	GList *dbus_objects = g_dbus_object_manager_get_objects(device_manager);
+	GError *error = NULL;
+	int ret = GATTLIB_SUCCESS;
+	OrgBluezDevice1* device;
+	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
+	if(ret != GATTLIB_SUCCESS) {
+		goto FREE_OBJECTS;
+	}
+	gchar *device_object_path;
+	g_object_get(G_OBJECT(device), "g-object-path", &device_object_path, NULL);
+
+	if(!org_bluez_device1_get_services_resolved(device))
+	{
+		ret = GATTLIB_NOT_FOUND;
+		goto FREE_DEVICE;
+	}
+
+	// Count the maximum number of characteristic to allocate the array
+	int count_max = 0, count = 0;
+	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(l->data));
+		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
+			continue;
+		}
+		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattCharacteristic1");
+		if (!interface) {
+			continue;
+		}
+
+		g_object_unref(interface);
+
+		count_max++;
+	}
+
+	gattlib_characteristic_t* characteristic_list = malloc(count_max * sizeof(gattlib_characteristic_t));
+	if (characteristic_list == NULL) {
+		ret = GATTLIB_OUT_OF_MEMORY;
+		goto FREE_DEVICE;
+	}
+
+	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+		GDBusObject *object = l->data;
+		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
+		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
+			continue;
+		}
+		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattCharacteristic1");
+		if (!interface) {
+			continue;
+		}
+
+		g_object_unref(interface);
+
+		OrgBluezGattCharacteristic1* characteristic = org_bluez_gatt_characteristic1_proxy_new_for_bus_sync(
+				G_BUS_TYPE_SYSTEM,
+				G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+				"org.bluez",
+				object_path,
+				NULL,
+				&error);
+		if (characteristic == NULL) {
+			if (error) {
+				fprintf(stderr, "Failed to open characteristic '%s': %s\n", object_path, error->message);
+				g_error_free(error);
+			} else {
+				fprintf(stderr, "Failed to open characteristic '%s'.\n", object_path);
+			}
+			continue;
+		}
+
+		int handle;
+
+		// Object path is in the form '/org/bluez/hci0/dev_DE_79_A2_A1_E9_FA/service0024/char0029'.
+		// We convert the last 4 hex characters into the handle
+		sscanf(object_path + strlen(object_path) - 4, "%x", &handle);
+
+		characteristic_list[count].handle = handle;
+		characteristic_list[count].value_handle = handle; // TODO: +1. If notify or indicate: ClientCharacteristicConfig at handle+2
+		characteristic_list[count].properties = 0;
+		const gchar *const * flags = org_bluez_gatt_characteristic1_get_flags(characteristic);
+		for (; *flags != NULL; flags++) {
+			if (strcmp(*flags,"broadcast") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_BROADCAST;
+			} else if (strcmp(*flags,"read") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_READ;
+			} else if (strcmp(*flags,"write") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_WRITE;
+			} else if (strcmp(*flags,"write-without-response") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_WRITE_WITHOUT_RESP;
+			} else if (strcmp(*flags,"notify") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_NOTIFY;
+			} else if (strcmp(*flags,"indicate") == 0) {
+				characteristic_list[count].properties |= GATTLIB_CHARACTERISTIC_INDICATE;
+			}
+		}
+
+		gattlib_string_to_uuid(
+				org_bluez_gatt_characteristic1_get_uuid(characteristic),
+				MAX_LEN_UUID_STR + 1,
+				&characteristic_list[count].uuid);
+		count = count + 1;
+
+		g_object_unref(characteristic);
+	}
+
+FREE_DEVICE:
+	g_object_unref(device);
+	g_free(device_object_path);
+FREE_OBJECTS:
+	g_list_free_full(dbus_objects, g_object_unref);
+
+	if(ret != GATTLIB_SUCCESS) {
+		if(characteristic_list)
+			free(characteristic_list);
+		*characteristics       = NULL;
+		*characteristics_count = 0;
+	} else {
+		*characteristics       = characteristic_list;
+		*characteristics_count = count;
+	}
+
+	return ret;
+}
+
 static void add_characteristics_from_service(gattlib_context_t* conn_context, GDBusObjectManager *device_manager,
 			const char* service_object_path,
 			int start, int end,

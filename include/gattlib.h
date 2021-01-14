@@ -408,6 +408,7 @@ typedef struct {
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_service_t** services, int* services_count);
+int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, gattlib_primary_service_t** services, int* services_count);
 
 /**
  * @brief Function to discover GATT Characteristic
@@ -436,6 +437,7 @@ int gattlib_discover_char_range(gatt_connection_t* connection, int start, int en
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_discover_char(gatt_connection_t* connection, gattlib_characteristic_t** characteristics, int* characteristics_count);
+int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattlib_characteristic_t** characteristics, int* characteristics_count);
 
 /**
  * @brief Function to discover GATT Descriptors in a range of handles
