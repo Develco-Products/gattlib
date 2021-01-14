@@ -396,6 +396,7 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 	OrgBluezDevice1* device;
 	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
 	if(ret != GATTLIB_SUCCESS) {
+		ret = GATTLIB_NOT_CONNECTED;
 		goto FREE_OBJECTS;
 	}
 	gchar *device_object_path;
@@ -403,7 +404,11 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 
 	if(!org_bluez_device1_get_services_resolved(device))
 	{
-		ret = GATTLIB_NOT_FOUND;
+		if(org_bluez_device1_get_connected(device)) {
+			ret = GATTLIB_BUSY;
+		} else {
+			ret = GATTLIB_NOT_CONNECTED;
+		}
 		goto FREE_DEVICE;
 	}
 
@@ -529,6 +534,7 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 	OrgBluezDevice1* device;
 	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
 	if(ret != GATTLIB_SUCCESS) {
+		ret = GATTLIB_NOT_CONNECTED;
 		goto FREE_OBJECTS;
 	}
 	gchar *device_object_path;
@@ -536,7 +542,11 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 
 	if(!org_bluez_device1_get_services_resolved(device))
 	{
-		ret = GATTLIB_NOT_FOUND;
+		if(org_bluez_device1_get_connected(device)) {
+			ret = GATTLIB_BUSY;
+		} else {
+			ret = GATTLIB_NOT_CONNECTED;
+		}
 		goto FREE_DEVICE;
 	}
 

@@ -62,6 +62,8 @@ extern "C" {
 #define GATTLIB_ERROR_DBUS          6
 #define GATTLIB_ERROR_BLUEZ         7
 #define GATTLIB_ERROR_INTERNAL      8
+#define GATTLIB_NOT_CONNECTED       9
+#define GATTLIB_BUSY               10
 //@}
 
 /**
