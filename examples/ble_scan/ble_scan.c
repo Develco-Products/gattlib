@@ -28,7 +28,8 @@ static void *ble_connect_device(void *arg) {
 	gatt_connection_t* gatt_connection;
 	gattlib_primary_service_t* services;
 	gattlib_characteristic_t* characteristics;
-	int services_count, characteristics_count;
+	gattlib_descriptor_t* descriptors;
+	int services_count, characteristics_count, descriptors_count;
 	char uuid_str[MAX_LEN_UUID_STR + 1];
 	int ret, i;
 
@@ -69,11 +70,25 @@ static void *ble_connect_device(void *arg) {
 	for (i = 0; i < characteristics_count; i++) {
 		gattlib_uuid_to_string(&characteristics[i].uuid, uuid_str, sizeof(uuid_str));
 
-		printf("characteristic[%d] properties:%02x value_handle:%04x uuid:%s\n", i,
-				characteristics[i].properties, characteristics[i].value_handle,
+		printf("characteristic[%d] properties:%02x handle:%04x value_handle:%04x uuid:%s\n", i,
+				characteristics[i].properties, characteristics[i].handle, characteristics[i].value_handle,
 				uuid_str);
 	}
 	free(characteristics);
+
+	// ret = gattlib_discover_desc(gatt_connection, &descriptors, &descriptors_count);
+	ret = gattlib_discover_desc_from_mac(adapter, addr, &descriptors, &descriptors_count);
+	if (ret != 0) {
+		fprintf(stderr, "Fail to discover descriptors.\n");
+		goto disconnect_exit;
+	}
+	for (i = 0; i < descriptors_count; i++) {
+		gattlib_uuid_to_string(&descriptors[i].uuid, uuid_str, sizeof(uuid_str));
+
+		printf("descriptor[%d] handle:%04x uuid:%s\n", i,
+				descriptors[i].handle, uuid_str);
+	}
+	free(descriptors);
 
 disconnect_exit:
 	gattlib_disconnect(gatt_connection);

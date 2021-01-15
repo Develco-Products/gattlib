@@ -81,7 +81,7 @@ extern "C" {
 /**
  * Helper function to create UUID16 from a 16bit integer
  */
-#define CREATE_UUID16(value16) { .type=SDP_UUID16, .value.uuid16=(value16) }
+#define CREATE_UUID16(value16) (uuid_t){ .type=SDP_UUID16, .value.uuid16=(value16) }
 
 /**
  * @name Options for gattlib_connect()
@@ -464,6 +464,7 @@ int gattlib_discover_desc_range(gatt_connection_t* connection, int start, int en
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_discover_desc(gatt_connection_t* connection, gattlib_descriptor_t** descriptors, int* descriptors_count);
+int gattlib_discover_desc_from_mac(void* adapter, const char *mac_address, gattlib_descriptor_t** descriptors, int* descriptors_count);
 
 /**
  * @brief Function to read GATT characteristic

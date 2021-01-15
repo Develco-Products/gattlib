@@ -868,6 +868,176 @@ int gattlib_discover_desc(gatt_connection_t* connection, gattlib_descriptor_t** 
 	return GATTLIB_NOT_SUPPORTED;
 }
 
+static void sort_descriptors(gattlib_descriptor_t *descriptors, int descriptors_count) {
+	for(int i=0; i<descriptors_count-1; i++) {
+		uint16_t smallestHandle = descriptors[i].handle;
+		int smallestIdx = i;
+		for(int j=i+1; j<descriptors_count; j++) {
+			if(descriptors[j].handle < smallestHandle) {
+				smallestHandle = descriptors[j].handle;
+				smallestIdx    = j;
+			}
+		}
+		// swap i and smallestIdx
+		gattlib_descriptor_t tmp = descriptors[i];
+		descriptors[i] = descriptors[smallestIdx];
+		descriptors[smallestIdx] = tmp;
+	}
+}
+
+int gattlib_discover_desc_from_mac(void* adapter, const char *mac_address, gattlib_descriptor_t** descriptors, int* descriptors_count) {
+	GDBusObjectManager *device_manager = get_device_manager_from_adapter(adapter);
+	GList *dbus_objects = g_dbus_object_manager_get_objects(device_manager);
+	GError *error = NULL;
+	int ret = GATTLIB_SUCCESS;
+	OrgBluezDevice1* device;
+	gchar *device_object_path;
+	gattlib_descriptor_t* descriptor_list = NULL;
+	gattlib_primary_service_t* services = NULL;
+	gattlib_characteristic_t* characteristics = NULL;
+	int services_count, characteristics_count;
+	
+	ret = gattlib_discover_primary_from_mac(adapter, mac_address, &services, &services_count);
+	if(ret != GATTLIB_SUCCESS) {
+		goto FREE_OBJECTS;
+	}
+
+	ret = gattlib_discover_char_from_mac(adapter, mac_address, &characteristics, &characteristics_count);
+	if(ret != GATTLIB_SUCCESS) {
+		goto FREE_OBJECTS;
+	}
+
+	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
+	if(ret != GATTLIB_SUCCESS) {
+		ret = GATTLIB_NOT_CONNECTED;
+		goto FREE_OBJECTS;
+	}
+	g_object_get(G_OBJECT(device), "g-object-path", &device_object_path, NULL);
+
+	if(!org_bluez_device1_get_services_resolved(device))
+	{
+		if(org_bluez_device1_get_connected(device)) {
+			ret = GATTLIB_BUSY;
+		} else {
+			ret = GATTLIB_NOT_CONNECTED;
+		}
+		goto FREE_DEVICE;
+	}
+
+	// Count the maximum number of descriptors to allocate the array
+	int count_max = services_count + characteristics_count*2;
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
+		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(l->data));
+		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
+			continue;
+		}
+		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattDescriptor1");
+		if (!interface) {
+			continue;
+		}
+
+		g_object_unref(interface);
+
+		count_max++;
+	}
+
+	descriptor_list = malloc(count_max * sizeof(gattlib_descriptor_t));
+	if (descriptor_list == NULL) {
+		ret = GATTLIB_OUT_OF_MEMORY;
+		goto FREE_DEVICE;
+	}
+
+	int count = 0;
+	for(int i=0; i<services_count; i++) {
+		descriptor_list[count].handle = services[i].attr_handle_start;
+		descriptor_list[count].uuid16 = GATT_PRIM_SVC_UUID;
+		descriptor_list[count].uuid   = CREATE_UUID16(GATT_PRIM_SVC_UUID);
+		count++;
+	}
+
+	for(int i=0; i<characteristics_count; i++) {
+		descriptor_list[count].handle = characteristics[i].handle;
+		descriptor_list[count].uuid16 = GATT_CHARAC_UUID;
+		descriptor_list[count].uuid   = CREATE_UUID16(GATT_CHARAC_UUID);
+		count++;
+		descriptor_list[count].handle = characteristics[i].value_handle;
+		descriptor_list[count].uuid16 = 0xFFFF;
+		descriptor_list[count].uuid   = characteristics[i].uuid;
+		count++;
+	}
+
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
+		GDBusObject *object = l->data;
+		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
+		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
+			continue;
+		}
+		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattDescriptor1");
+		if (!interface) {
+			continue;
+		}
+
+		g_object_unref(interface);
+
+		OrgBluezGattDescriptor1* descriptor = org_bluez_gatt_descriptor1_proxy_new_for_bus_sync(
+				G_BUS_TYPE_SYSTEM,
+				G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+				"org.bluez",
+				object_path,
+				NULL,
+				&error);
+		if (descriptor == NULL) {
+			if (error) {
+				fprintf(stderr, "Failed to open descriptor '%s': %s\n", object_path, error->message);
+				g_error_free(error);
+			} else {
+				fprintf(stderr, "Failed to open descriptor '%s'.\n", object_path);
+			}
+			continue;
+		}
+
+		int handle;
+
+		// Object path is in the form '/org/bluez/hci0/dev_DE_79_A2_A1_E9_FA/service0024/char0029/desc002b'.
+		// We convert the last 4 hex characters into the handle
+		sscanf(object_path + strlen(object_path) - 4, "%x", &handle);
+
+		descriptor_list[count].handle = handle;
+
+		gattlib_string_to_uuid(
+				org_bluez_gatt_descriptor1_get_uuid(descriptor),
+				MAX_LEN_UUID_STR + 1,
+				&descriptor_list[count].uuid);
+		descriptor_list[count].uuid16 = descriptor_list[count].uuid.value.uuid16;
+		count = count + 1;
+
+		g_object_unref(descriptor);
+	}
+
+FREE_DEVICE:
+	g_object_unref(device);
+	g_free(device_object_path);
+FREE_OBJECTS:
+	g_list_free_full(dbus_objects, g_object_unref);
+	if(services)
+		free(services);
+	if(characteristics)
+		free(characteristics);
+
+	if(ret != GATTLIB_SUCCESS) {
+		if(descriptor_list)
+			free(descriptor_list);
+		*descriptors       = NULL;
+		*descriptors_count = 0;
+	} else {
+		sort_descriptors(descriptor_list, count);
+		*descriptors       = descriptor_list;
+		*descriptors_count = count;
+	}
+
+	return ret;
+}
+
 int get_bluez_device_from_mac(struct gattlib_adapter *adapter, const char *mac_address, OrgBluezDevice1 **bluez_device1)
 {
 	GError *error = NULL;
