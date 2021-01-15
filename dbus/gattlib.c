@@ -394,12 +394,14 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 	GError *error = NULL;
 	int ret = GATTLIB_SUCCESS;
 	OrgBluezDevice1* device;
+	gchar * device_object_path;
+	gattlib_primary_service_t* primary_services = NULL;
+
 	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
 	if(ret != GATTLIB_SUCCESS) {
 		ret = GATTLIB_NOT_CONNECTED;
 		goto FREE_OBJECTS;
 	}
-	gchar *device_object_path;
 	g_object_get(G_OBJECT(device), "g-object-path", &device_object_path, NULL);
 
 	if(!org_bluez_device1_get_services_resolved(device))
@@ -425,7 +427,7 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 		count_max++;
 	}
 
-	gattlib_primary_service_t* primary_services = malloc(count_max * sizeof(gattlib_primary_service_t));
+	primary_services = malloc(count_max * sizeof(gattlib_primary_service_t));
 	if (primary_services == NULL) {
 		ret = GATTLIB_OUT_OF_MEMORY;
 		goto FREE_DEVICE;
@@ -532,12 +534,14 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 	GError *error = NULL;
 	int ret = GATTLIB_SUCCESS;
 	OrgBluezDevice1* device;
+	gchar *device_object_path;
+	gattlib_characteristic_t* characteristic_list = NULL;
+
 	ret = get_bluez_device_from_mac(adapter, mac_address, &device);
 	if(ret != GATTLIB_SUCCESS) {
 		ret = GATTLIB_NOT_CONNECTED;
 		goto FREE_OBJECTS;
 	}
-	gchar *device_object_path;
 	g_object_get(G_OBJECT(device), "g-object-path", &device_object_path, NULL);
 
 	if(!org_bluez_device1_get_services_resolved(device))
@@ -567,7 +571,7 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 		count_max++;
 	}
 
-	gattlib_characteristic_t* characteristic_list = malloc(count_max * sizeof(gattlib_characteristic_t));
+	characteristic_list = malloc(count_max * sizeof(gattlib_characteristic_t));
 	if (characteristic_list == NULL) {
 		ret = GATTLIB_OUT_OF_MEMORY;
 		goto FREE_DEVICE;
