@@ -360,8 +360,8 @@ int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_serv
 					// We convert the last 4 hex characters into the handle
 					sscanf(characteristic_path + strlen(characteristic_path) - 4, "%x", &char_handle);
 
-					primary_services[count].attr_handle_start = MIN(primary_services[count].attr_handle_start, char_handle);
-					primary_services[count].attr_handle_end   = MAX(primary_services[count].attr_handle_end, char_handle);
+					primary_services[count].attr_handle_start = MIN(primary_services[count].attr_handle_start, char_handle  );
+					primary_services[count].attr_handle_end   = MAX(primary_services[count].attr_handle_end,   char_handle+1);
 				}
 			}
 
@@ -494,8 +494,8 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 					// We convert the last 4 hex characters into the handle
 					sscanf(characteristic_path + strlen(characteristic_path) - 4, "%x", &char_handle);
 
-					primary_services[count].attr_handle_start = MIN(primary_services[count].attr_handle_start, char_handle);
-					primary_services[count].attr_handle_end   = MAX(primary_services[count].attr_handle_end, char_handle);
+					primary_services[count].attr_handle_start = MIN(primary_services[count].attr_handle_start, char_handle  );
+					primary_services[count].attr_handle_end   = MAX(primary_services[count].attr_handle_end,   char_handle+1);
 				}
 			}
 
@@ -614,7 +614,7 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 		sscanf(object_path + strlen(object_path) - 4, "%x", &handle);
 
 		characteristic_list[count].handle = handle;
-		characteristic_list[count].value_handle = handle; // TODO: +1. If notify or indicate: ClientCharacteristicConfig at handle+2
+		characteristic_list[count].value_handle = handle+1;
 		characteristic_list[count].properties = 0;
 		const gchar *const * flags = org_bluez_gatt_characteristic1_get_flags(characteristic);
 		for (; *flags != NULL; flags++) {
@@ -711,7 +711,7 @@ static void add_characteristics_from_service(gattlib_context_t* conn_context, GD
 			}
 
 			characteristic_list[*count].handle = handle;
-			characteristic_list[*count].value_handle = handle;
+			characteristic_list[*count].value_handle = handle+1;
 			characteristic_list[*count].properties = 0;
 			const gchar *const * flags = org_bluez_gatt_characteristic1_get_flags(characteristic);
 			for (; *flags != NULL; flags++) {
