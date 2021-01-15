@@ -260,6 +260,23 @@ int gattlib_disconnect(gatt_connection_t* connection) {
 	return GATTLIB_SUCCESS;
 }
 
+static void sort_services(gattlib_primary_service_t *services, int services_count) {
+	for(int i=0; i<services_count-1; i++) {
+		uint16_t smallestHandle = services[i].attr_handle_start;
+		int smallestIdx = i;
+		for(int j=i+1; j<services_count; j++) {
+			if(services[j].attr_handle_start < smallestHandle) {
+				smallestHandle = services[j].attr_handle_start;
+				smallestIdx    = j;
+			}
+		}
+		// swap i and smallestIdx
+		gattlib_primary_service_t tmp = services[i];
+		services[i] = services[smallestIdx];
+		services[smallestIdx] = tmp;
+	}
+}
+
 int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_service_t** services, int* services_count) {
 	gattlib_context_t* conn_context = connection->context;
 	GDBusObjectManager *device_manager = get_device_manager_from_adapter(conn_context->adapter);
@@ -296,8 +313,7 @@ int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_serv
 		return GATTLIB_OUT_OF_MEMORY;
 	}
 
-	GList *l;
-	for (l = g_list_last(conn_context->dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = conn_context->dbus_objects; l != NULL; l = l->next)  {
 		GDBusObject *object = l->data;
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
 
@@ -376,6 +392,7 @@ int gattlib_discover_primary(gatt_connection_t* connection, gattlib_primary_serv
 	}
 
 	if (services != NULL) {
+		sort_services(primary_services, count);
 		*services       = primary_services;
 	}
 	if (services_count != NULL) {
@@ -433,7 +450,7 @@ int gattlib_discover_primary_from_mac(void* adapter, const char *mac_address, ga
 		goto FREE_DEVICE;
 	}
 
-	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(l->data));
 
 		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattService1");
@@ -521,11 +538,29 @@ FREE_OBJECTS:
 		*services       = NULL;
 		*services_count = 0;
 	} else {
+		sort_services(primary_services, count);
 		*services       = primary_services;
 		*services_count = count;
 	}
 
 	return ret;
+}
+
+static void sort_characteristics(gattlib_characteristic_t *characteristics, int characteristics_count) {
+	for(int i=0; i<characteristics_count-1; i++) {
+		uint16_t smallestHandle = characteristics[i].handle;
+		int smallestIdx = i;
+		for(int j=i+1; j<characteristics_count; j++) {
+			if(characteristics[j].handle < smallestHandle) {
+				smallestHandle = characteristics[j].handle;
+				smallestIdx    = j;
+			}
+		}
+		// swap i and smallestIdx
+		gattlib_characteristic_t tmp = characteristics[i];
+		characteristics[i] = characteristics[smallestIdx];
+		characteristics[smallestIdx] = tmp;
+	}
 }
 
 int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattlib_characteristic_t** characteristics, int* characteristics_count) {
@@ -556,7 +591,7 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 
 	// Count the maximum number of characteristic to allocate the array
 	int count_max = 0, count = 0;
-	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(l->data));
 		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
 			continue;
@@ -577,7 +612,7 @@ int gattlib_discover_char_from_mac(void* adapter, const char *mac_address, gattl
 		goto FREE_DEVICE;
 	}
 
-	for (GList *l = g_list_last(dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
 		GDBusObject *object = l->data;
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
 		if(strncmp(object_path, device_object_path, strlen(device_object_path)) != 0) {
@@ -654,6 +689,7 @@ FREE_OBJECTS:
 		*characteristics       = NULL;
 		*characteristics_count = 0;
 	} else {
+		sort_characteristics(characteristic_list, count);
 		*characteristics       = characteristic_list;
 		*characteristics_count = count;
 	}
@@ -668,7 +704,7 @@ static void add_characteristics_from_service(gattlib_context_t* conn_context, GD
 {
 	GError *error = NULL;
 
-	for (GList *l = g_list_last(conn_context->dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = conn_context->dbus_objects; l != NULL; l = l->next)  {
 		GDBusObject *object = l->data;
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
 		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattCharacteristic1");
@@ -745,7 +781,6 @@ int gattlib_discover_char_range(gatt_connection_t* connection, int start, int en
 	gattlib_context_t* conn_context = connection->context;
 	GDBusObjectManager *device_manager = get_device_manager_from_adapter(conn_context->adapter);
 	GError *error = NULL;
-	GList *l;
 
 	if (device_manager == NULL) {
 		fprintf(stderr, "Gattlib context not initialized.\n");
@@ -754,7 +789,7 @@ int gattlib_discover_char_range(gatt_connection_t* connection, int start, int en
 
 	// Count the maximum number of characteristic to allocate the array (we count all the characterstic for all devices)
 	int count_max = 0, count = 0;
-	for (l = g_list_last(conn_context->dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = conn_context->dbus_objects; l != NULL; l = l->next)  {
 		GDBusObject *object = l->data;
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
 		GDBusInterface *interface = g_dbus_object_manager_get_interface(device_manager, object_path, "org.bluez.GattCharacteristic1");
@@ -773,7 +808,7 @@ int gattlib_discover_char_range(gatt_connection_t* connection, int start, int en
 	}
 
 	// List all services for this device
-	for (l = g_list_last(conn_context->dbus_objects); l != NULL; l = g_list_previous(l))  {
+	for (GList *l = conn_context->dbus_objects; l != NULL; l = l->next)  {
 		GDBusObject *object = l->data;
 		const char* object_path = g_dbus_object_get_object_path(G_DBUS_OBJECT(object));
 
@@ -814,6 +849,7 @@ int gattlib_discover_char_range(gatt_connection_t* connection, int start, int en
 		g_object_unref(service_proxy);
 	}
 
+	sort_characteristics(characteristic_list, count);
 	*characteristics       = characteristic_list;
 	*characteristics_count = count;
 	return GATTLIB_SUCCESS;
