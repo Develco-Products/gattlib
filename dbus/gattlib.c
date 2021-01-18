@@ -896,6 +896,7 @@ int gattlib_discover_desc_from_mac(void* adapter, const char *mac_address, gattl
 	gattlib_primary_service_t* services = NULL;
 	gattlib_characteristic_t* characteristics = NULL;
 	int services_count, characteristics_count;
+	int count = 0;
 	
 	ret = gattlib_discover_primary_from_mac(adapter, mac_address, &services, &services_count);
 	if(ret != GATTLIB_SUCCESS) {
@@ -947,7 +948,6 @@ int gattlib_discover_desc_from_mac(void* adapter, const char *mac_address, gattl
 		goto FREE_DEVICE;
 	}
 
-	int count = 0;
 	for(int i=0; i<services_count; i++) {
 		descriptor_list[count].handle = services[i].attr_handle_start;
 		descriptor_list[count].uuid16 = GATT_PRIM_SVC_UUID;
