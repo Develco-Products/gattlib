@@ -94,6 +94,12 @@ GDBusObjectManager *get_device_manager_from_adapter(struct gattlib_adapter *gatt
 	GError *error = NULL;
 
 	if (gattlib_adapter->device_manager) {
+		// Ensure there is no unhandled events on main/NULL loop
+		// otherwise dbus object proxies could be out of sync
+		while(g_main_context_pending(NULL)) {
+			g_main_context_iteration(NULL, FALSE);
+		}
+
 		return gattlib_adapter->device_manager;
 	}
 
