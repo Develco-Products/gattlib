@@ -35,7 +35,7 @@ const uuid_t m_battery_level_uuid = CREATE_UUID16(0x2A19);
 static const uuid_t m_ccc_uuid = CREATE_UUID16(0x2902);
 
 
-static bool handle_dbus_gattcharacteristic_from_path(gattlib_context_t* conn_context, const uuid_t* uuid,
+static bool handle_dbus_gattcharacteristic_from_path(const char* device_object_path, const uuid_t* uuid,
 		struct dbus_characteristic *dbus_characteristic, const char* object_path, GError **error)
 {
 	OrgBluezGattCharacteristic1 *characteristic = NULL;
@@ -72,7 +72,7 @@ static bool handle_dbus_gattcharacteristic_from_path(gattlib_context_t* conn_con
 			error);
 
 		if (service) {
-			const bool found = !strcmp(conn_context->device_object_path, org_bluez_gatt_service1_get_device(service));
+			const bool found = !strcmp(device_object_path, org_bluez_gatt_service1_get_device(service));
 
 			g_object_unref(service);
 
@@ -146,7 +146,7 @@ struct dbus_characteristic get_characteristic_from_uuid(gatt_connection_t* conne
 		if (interface) {
 			g_object_unref(interface);
 
-			found = handle_dbus_gattcharacteristic_from_path(conn_context, uuid, &dbus_characteristic, object_path, &error);
+			found = handle_dbus_gattcharacteristic_from_path(conn_context->device_object_path, uuid, &dbus_characteristic, object_path, &error);
 			if (found) {
 				break;
 			}
@@ -172,9 +172,7 @@ struct dbus_characteristic get_characteristic_from_uuid(gatt_connection_t* conne
 	return dbus_characteristic;
 }
 
-static struct dbus_characteristic get_characteristic_from_handle(gatt_connection_t* connection, int handle) {
-	gattlib_context_t* conn_context = connection->context;
-	GDBusObjectManager *device_manager = get_device_manager_from_adapter(conn_context->adapter);
+static struct dbus_characteristic get_characteristic_from_handle_nc(GDBusObjectManager *device_manager, GList *dbus_objects, const char *device_object_path, int handle) {
 	GError *error = NULL;
 	int char_handle;
 
@@ -187,7 +185,7 @@ static struct dbus_characteristic get_characteristic_from_handle(gatt_connection
 		return dbus_characteristic;
 	}
 
-	for (GList *l = conn_context->dbus_objects; l != NULL; l = l->next)  {
+	for (GList *l = dbus_objects; l != NULL; l = l->next)  {
 		GDBusInterface *interface;
 		bool found;
 		GDBusObject *object = l->data;
@@ -201,11 +199,12 @@ static struct dbus_characteristic get_characteristic_from_handle(gatt_connection
 			// We convert the last 4 hex characters into the handle
 			sscanf(object_path + strlen(object_path) - 4, "%x", &char_handle);
 
-			if (char_handle != handle) {
+			// value handle at char_handle+1
+			if (char_handle+1 != handle) {
 				continue;
 			}
 
-			found = handle_dbus_gattcharacteristic_from_path(conn_context, NULL, &dbus_characteristic, object_path, &error);
+			found = handle_dbus_gattcharacteristic_from_path(device_object_path, NULL, &dbus_characteristic, object_path, &error);
 			if (found) {
 				break;
 			}
@@ -213,6 +212,26 @@ static struct dbus_characteristic get_characteristic_from_handle(gatt_connection
 	}
 
 	return dbus_characteristic;
+}
+
+static struct dbus_characteristic get_characteristic_from_handle(gatt_connection_t* connection, int handle) {
+	gattlib_context_t* conn_context = connection->context;
+	GDBusObjectManager *device_manager = get_device_manager_from_adapter(conn_context->adapter);
+
+	return get_characteristic_from_handle_nc(device_manager, conn_context->dbus_objects, conn_context->device_object_path, handle);
+}
+
+struct dbus_characteristic get_characteristic_from_mac_and_handle(void *adapter, const char *mac_address, int handle) {
+	GDBusObjectManager *device_manager = get_device_manager_from_adapter(adapter);
+	GList *dbus_objects = g_dbus_object_manager_get_objects(device_manager);
+	char object_path[100];
+	get_device_path_from_mac_with_adapter(((struct gattlib_adapter *)adapter)->adapter_proxy, mac_address, object_path, sizeof(object_path));
+
+	struct dbus_characteristic res = get_characteristic_from_handle_nc(device_manager, dbus_objects, object_path, handle);
+
+	g_list_free_full(dbus_objects, g_object_unref);
+
+	return res;
 }
 
 static int read_gatt_characteristic(struct dbus_characteristic *dbus_characteristic, void **buffer, size_t* buffer_len) {
@@ -266,6 +285,32 @@ static int read_battery_level(struct dbus_characteristic *dbus_characteristic, v
 	return GATTLIB_SUCCESS;
 }
 #endif
+
+int gattlib_read_by_handle_from_mac(void *adapter, const char *mac_address, uint16_t handle, void** buffer, size_t* buffer_len) {
+	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
+		return GATTLIB_NOT_CONNECTED;
+	}
+	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
+	if (dbus_characteristic.type == TYPE_NONE) {
+		return GATTLIB_NOT_FOUND;
+	}
+#if BLUEZ_VERSION > BLUEZ_VERSIONS(5, 40)
+	else if (dbus_characteristic.type == TYPE_BATTERY_LEVEL) {
+		return read_battery_level(&dbus_characteristic, buffer, buffer_len);
+	}
+#endif
+	else {
+		int ret;
+
+		assert(dbus_characteristic.type == TYPE_GATT);
+
+		ret = read_gatt_characteristic(&dbus_characteristic, buffer, buffer_len);
+
+		g_object_unref(dbus_characteristic.gatt);
+
+		return ret;
+	}
+}
 
 int gattlib_read_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, void **buffer, size_t *buffer_len) {
 	struct dbus_characteristic dbus_characteristic = get_characteristic_from_uuid(connection, uuid);

@@ -492,6 +492,18 @@ int gattlib_read_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, void*
 int gattlib_read_char_by_uuid_async(gatt_connection_t* connection, uuid_t* uuid, gatt_read_cb_t gatt_read_cb);
 
 /**
+ * @brief Function to read GATT characteristic
+ *
+ * @note buffer is allocated by the function. It is the responsibility of the caller to free the buffer.
+ *
+ * @param buffer contains the value to read. It is allocated by the function.
+ * @param buffer_len Length of the read data
+ *
+ * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
+ */
+int gattlib_read_by_handle_from_mac(void* adapter, const char *mac_address, uint16_t handle, void** buffer, size_t* buffer_len);
+
+/**
  * @brief Function to write to the GATT characteristic UUID
  *
  * @param connection Active GATT connection
