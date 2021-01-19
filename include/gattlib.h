@@ -645,6 +645,16 @@ void gattlib_register_indication(gatt_connection_t* connection, gattlib_event_ha
  */
 bool gattlib_is_public_address_type_from_mac(void *adapter, const char *mac_address);
 
+/*
+ * @brief Checks whether the device is connected
+ *
+ * @param adapter is the adapter to where the device has been seen
+ * @param mac_address is the MAC address of the device to look up
+ *
+ * @return TRUE if device is connected. FALSE on error, or if device is not connected
+ */
+bool gattlib_is_connected_from_mac(void *adapter, const char *mac_address);
+
 #if 0 // Disable until https://github.com/labapart/gattlib/issues/75 is resolved
 /**
  * @brief Function to retrieve RSSI from a GATT connection
