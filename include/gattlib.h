@@ -526,6 +526,7 @@ int gattlib_write_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, cons
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_write_char_by_handle(gatt_connection_t* connection, uint16_t handle, const void* buffer, size_t buffer_len);
+int gattlib_write_by_handle_from_mac(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len);
 
 /**
  * @brief Function to write without response to the GATT characteristic UUID

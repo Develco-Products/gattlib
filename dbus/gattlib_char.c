@@ -441,6 +441,30 @@ int gattlib_write_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, cons
 	return ret;
 }
 
+int gattlib_write_by_handle_from_mac(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len) {
+	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
+		return GATTLIB_NOT_CONNECTED;
+	}
+	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
+	if (dbus_characteristic.type == TYPE_NONE) {
+		return GATTLIB_NOT_FOUND;
+	}
+	else if (dbus_characteristic.type == TYPE_BATTERY_LEVEL) {
+		return GATTLIB_NOT_SUPPORTED; // Battery level does not support write
+	}
+	else {
+		int ret;
+
+		assert(dbus_characteristic.type == TYPE_GATT);
+
+		ret = write_char(&dbus_characteristic, buffer, buffer_len, BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE);
+
+		g_object_unref(dbus_characteristic.gatt);
+
+		return ret;
+	}
+}
+
 int gattlib_write_char_by_handle(gatt_connection_t* connection, uint16_t handle, const void* buffer, size_t buffer_len)
 {
 	int ret;
