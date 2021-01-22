@@ -668,6 +668,16 @@ bool gattlib_is_public_address_type_from_mac(void *adapter, const char *mac_addr
  */
 bool gattlib_is_connected_from_mac(void *adapter, const char *mac_address);
 
+/*
+ * @brief Checks whether the services has been resolved for the device
+ *
+ * @param adapter is the adapter to where the device has been seen
+ * @param mac_address is the MAC address of the device to look up
+ *
+ * @return TRUE if service is resolved. FALSE on error, or if services is not resolved.
+ */
+bool gattlib_is_services_resolved_from_mac(void *adapter, const char *mac_address);
+
 #if 0 // Disable until https://github.com/labapart/gattlib/issues/75 is resolved
 /**
  * @brief Function to retrieve RSSI from a GATT connection

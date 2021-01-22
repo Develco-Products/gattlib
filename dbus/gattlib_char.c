@@ -290,6 +290,9 @@ int gattlib_read_by_handle_from_mac(void *adapter, const char *mac_address, uint
 	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
 		return GATTLIB_NOT_CONNECTED;
 	}
+	if(!gattlib_is_services_resolved_from_mac(adapter, mac_address)) {
+		return GATTLIB_BUSY;
+	}
 	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
 	if (dbus_characteristic.type == TYPE_NONE) {
 		return GATTLIB_NOT_FOUND;
@@ -444,6 +447,9 @@ int gattlib_write_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, cons
 int gattlib_write_by_handle_from_mac(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len) {
 	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
 		return GATTLIB_NOT_CONNECTED;
+	}
+	if(!gattlib_is_services_resolved_from_mac(adapter, mac_address)) {
+		return GATTLIB_BUSY;
 	}
 	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
 	if (dbus_characteristic.type == TYPE_NONE) {

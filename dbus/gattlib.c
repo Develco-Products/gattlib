@@ -1101,6 +1101,23 @@ bool gattlib_is_connected_from_mac(void *adapter, const char *mac_address)
 	return connected;
 }
 
+bool gattlib_is_services_resolved_from_mac(void *adapter, const char *mac_address)
+{
+	OrgBluezDevice1 *bluez_device1;
+	int ret;
+
+	ret = get_bluez_device_from_mac(adapter, mac_address, &bluez_device1);
+	if (ret != GATTLIB_SUCCESS) {
+		g_object_unref(bluez_device1);
+		return FALSE;
+	}
+
+	bool resolved = org_bluez_device1_get_services_resolved(bluez_device1);
+
+	g_object_unref(bluez_device1);
+	return resolved;
+}
+
 #if 0 // Disable until https://github.com/labapart/gattlib/issues/75 is resolved
 int gattlib_get_rssi(gatt_connection_t *connection, int16_t *rssi)
 {
