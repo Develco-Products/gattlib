@@ -78,6 +78,7 @@ struct gattlib_adapter {
 struct dbus_characteristic {
 	union {
 		OrgBluezGattCharacteristic1 *gatt;
+		OrgBluezGattDescriptor1     *desc;
 #if BLUEZ_VERSION > BLUEZ_VERSIONS(5, 40)
 		OrgBluezBattery1            *battery;
 #endif
@@ -85,6 +86,7 @@ struct dbus_characteristic {
 	enum {
 		TYPE_NONE = 0,
 		TYPE_GATT,
+		TYPE_DESCRIPTOR,
 		TYPE_BATTERY_LEVEL
 	} type;
 };
