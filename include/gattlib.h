@@ -766,6 +766,11 @@ int gattlib_get_advertisement_data_from_mac(void *adapter, const char *mac_addre
 		uint16_t *manufacturer_id, uint8_t **manufacturer_data, size_t *manufacturer_data_size);
 
 /**
+ * @brief Function to process pending glib events
+ */
+void gattlib_process_events(void);
+
+/**
  * @brief Convert a UUID into a string
  *
  * @param uuid is the UUID to convert

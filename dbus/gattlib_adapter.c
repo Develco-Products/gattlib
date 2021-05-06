@@ -89,6 +89,11 @@ const char * gattlib_adapter_get_address(void* adapter) {
 	return org_bluez_adapter1_get_address(gattlib_adapter->adapter_proxy);
 }
 
+void gattlib_process_events(void) {
+	while(g_main_context_pending(NULL)) {
+		g_main_context_iteration(NULL, FALSE);
+	}
+}
 
 GDBusObjectManager *get_device_manager_from_adapter(struct gattlib_adapter *gattlib_adapter) {
 	GError *error = NULL;
@@ -96,9 +101,7 @@ GDBusObjectManager *get_device_manager_from_adapter(struct gattlib_adapter *gatt
 	if (gattlib_adapter->device_manager) {
 		// Ensure there is no unhandled events on main/NULL loop
 		// otherwise dbus object proxies could be out of sync
-		while(g_main_context_pending(NULL)) {
-			g_main_context_iteration(NULL, FALSE);
-		}
+		gattlib_process_events();
 
 		return gattlib_adapter->device_manager;
 	}
