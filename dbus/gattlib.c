@@ -1242,3 +1242,79 @@ int gattlib_get_raw_advertising_data_from_mac(void *adapter, const char *mac_add
 	return ret;
 }
 
+gboolean services_resolved_cb_handler(
+	    OrgBluezDevice1 *device,
+	    GVariant *arg_changed_properties,
+	    const gchar *const *arg_invalidated_properties,
+	    gpointer user_data)
+{
+	services_resolved_cb cb = user_data;
+
+	// Retrieve 'Value' from 'arg_changed_properties'
+	if (g_variant_n_children (arg_changed_properties) > 0) {
+		GVariantIter *iter;
+		const gchar *key;
+		GVariant *value;
+
+		g_variant_get (arg_changed_properties, "a{sv}", &iter);
+		while (g_variant_iter_loop (iter, "{&sv}", &key, &value)) {
+			if (strcmp(key, "ServicesResolved") == 0) {
+				// call cb
+				const char* address = org_bluez_device1_get_address(device);
+				const char* address_type = org_bluez_device1_get_address_type(device);
+				bool is_public_addr = address_type != NULL && 0 == strcmp(address_type, "public");
+				bool services_resolved = g_variant_get_boolean(value);
+				if(address != NULL)
+					cb(address, is_public_addr, services_resolved);
+			}
+		}
+		g_variant_iter_free(iter);
+	}
+	return TRUE;
+}
+
+void* gattlib_add_services_resolved_cb(void* adapter, const char *mac, services_resolved_cb cb)
+{
+	struct gattlib_adapter *gattlib_adapter = adapter;
+	const char* adapter_name = NULL;
+	char object_path[100];
+	GError *error = NULL;
+
+	// In case NULL is passed, we initialized default adapter
+	if (gattlib_adapter == NULL) {
+		gattlib_adapter = init_default_adapter();
+	} else {
+		adapter_name = gattlib_adapter->adapter_name;
+	}
+
+	get_device_path_from_mac(adapter_name, mac, object_path, sizeof(object_path));
+
+	OrgBluezDevice1* device = org_bluez_device1_proxy_new_for_bus_sync(
+			G_BUS_TYPE_SYSTEM,
+			G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+			"org.bluez",
+			object_path,
+			NULL,
+			&error);
+	if (device == NULL) {
+		if (error) {
+			fprintf(stderr, "Failed to connect to DBus Bluez Device: %s\n", error->message);
+			g_error_free(error);
+			return NULL;
+		}
+	}
+
+	// Register a handle for notification
+	g_signal_connect(device,
+		"g-properties-changed",
+		G_CALLBACK (services_resolved_cb_handler),
+		cb);
+
+	return device;
+}
+
+void gattlib_remove_services_resolved_cb(void* handle)
+{
+	g_object_unref(handle);
+}
+

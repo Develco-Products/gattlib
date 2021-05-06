@@ -771,6 +771,26 @@ int gattlib_get_advertisement_data_from_mac(void *adapter, const char *mac_addre
 void gattlib_process_events(void);
 
 /**
+ * @brief Function to add a callback when services_resolved has been updated for a device
+ *
+ * @param adapter is the adapter the new device has been seen
+ * @param mac_address is the MAC address of the device
+ * @param cb is the callback to be called when services_resolved is updated for the device
+ *
+ * @return handle to be used for removing the callback once it is no longer needed
+ */
+typedef void (*services_resolved_cb)(const char* mac_address, bool is_public_address, bool resolved);
+void* gattlib_add_services_resolved_cb(void* adapter, const char *mac, services_resolved_cb cb);
+
+/**
+ * @brief Function to remove a services resolved callback again
+ *
+ * @param handle is the handle received when adding the callback
+*/
+void gattlib_remove_services_resolved_cb(void* handle);
+
+
+/**
  * @brief Convert a UUID into a string
  *
  * @param uuid is the UUID to convert
