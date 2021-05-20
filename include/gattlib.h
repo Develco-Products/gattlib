@@ -79,6 +79,16 @@ extern "C" {
 //@}
 
 /**
+ * @name GATT write option values
+ */
+//@{
+#define BLUEZ_GATT_WRITE_VALUE_TYPE_MASK                    (0x7)
+#define BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE     (1 << 0)
+#define BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITHOUT_RESPONSE  (1 << 1)
+#define BLUEZ_GATT_WRITE_VALUE_TYPE_RELIABLE_WRITE          (1 << 2)
+//@}
+
+/**
  * Helper function to create UUID16 from a 16bit integer
  */
 #define CREATE_UUID16(value16) (uuid_t){ .type=SDP_UUID16, .value.uuid16=(value16) }
@@ -200,12 +210,20 @@ typedef void (*gatt_connect_cb_t)(gatt_connection_t* connection, void* user_data
 /**
  * @brief Callback called when GATT characteristic read value has been received
  *
+ * @param status is the result of the operation
  * @param buffer contains the value to read.
  * @param buffer_len Length of the read data
  *
  */
-typedef void* (*gatt_read_cb_t)(const void *buffer, size_t buffer_len);
+typedef void (*gatt_read_cb_t)(int status, void* user_data, const void *buffer, size_t buffer_len);
 
+/**
+ * @brief Callback called when GATT characteristic write value has been completed
+ *
+ * @param status is the result of the operation
+ *
+ */
+typedef void (*gatt_write_cb_t)(int status, void* user_data);
 
 /**
  * @brief Constant defining Eddystone common data UID in Advertisement data
@@ -481,27 +499,34 @@ int gattlib_discover_desc_from_mac(void* adapter, const char *mac_address, gattl
 int gattlib_read_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, void** buffer, size_t* buffer_len);
 
 /**
- * @brief Function to asynchronously read GATT characteristic
- *
- * @param connection Active GATT connection
- * @param uuid UUID of the GATT characteristic to read
- * @param gatt_read_cb is the callback to read when the GATT characteristic is available
- *
- * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
- */
-int gattlib_read_char_by_uuid_async(gatt_connection_t* connection, uuid_t* uuid, gatt_read_cb_t gatt_read_cb);
-
-/**
  * @brief Function to read GATT characteristic
  *
  * @note buffer is allocated by the function. It is the responsibility of the caller to free the buffer.
  *
+ * @param adapter is the gattlib adapter to use
+ * @param mac_address is the address of the device
+ * @param handle is the handle of the characteristic
  * @param buffer contains the value to read. It is allocated by the function.
  * @param buffer_len Length of the read data
  *
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_read_by_handle_from_mac(void* adapter, const char *mac_address, uint16_t handle, void** buffer, size_t* buffer_len);
+
+/**
+ * @brief Function to read GATT characteristic
+ *
+ * @note buffer is allocated by the function. It is the responsibility of the caller to free the buffer.
+ *
+ * @param adapter is the gattlib adapter to use
+ * @param mac_address is the address of the device
+ * @param handle is the handle of the characteristic
+ * @param user_data is the user data to include in the callback
+ * @param cb is the callback to be called when read is complete
+ *
+ * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
+ */
+void gattlib_read_by_handle_from_mac_async(void* adapter, const char *mac_address, uint16_t handle, void *user_data, gatt_read_cb_t cb);
 
 /**
  * @brief Function to write to the GATT characteristic UUID
@@ -526,7 +551,21 @@ int gattlib_write_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, cons
  * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
  */
 int gattlib_write_char_by_handle(gatt_connection_t* connection, uint16_t handle, const void* buffer, size_t buffer_len);
+
+/**
+ * @brief Function to write to the GATT characteristic handle
+ *
+ * @param adapter is the gattlib adapter to use
+ * @param mac_address is the address of the device
+ * @param handle is the handle of the GATT characteristic
+ * @param buffer contains the values to write to the GATT characteristic
+ * @param buffer_len is the length of the buffer to write
+ *
+ * @return GATTLIB_SUCCESS on success or GATTLIB_* error code
+ */
 int gattlib_write_by_handle_from_mac(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len);
+//TBD
+void gattlib_write_by_handle_from_mac_async(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len, void *user_data, gatt_write_cb_t cb);
 
 /**
  * @brief Function to write without response to the GATT characteristic UUID

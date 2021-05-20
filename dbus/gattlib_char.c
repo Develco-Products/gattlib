@@ -25,10 +25,15 @@
 
 #include "gattlib_internal.h"
 
-#define BLUEZ_GATT_WRITE_VALUE_TYPE_MASK                    (0x7)
-#define BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE     (1 << 0)
-#define BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITHOUT_RESPONSE  (1 << 1)
-#define BLUEZ_GATT_WRITE_VALUE_TYPE_RELIABLE_WRITE          (1 << 2)
+typedef struct {
+	void* caller_user_data;
+	gatt_read_cb_t cb;
+} gatt_async_read_data_t;
+
+typedef struct {
+	void* caller_user_data;
+	gatt_write_cb_t cb;
+} gatt_async_write_data_t;
 
 
 const uuid_t m_battery_level_uuid = CREATE_UUID16(0x2A19);
@@ -319,6 +324,46 @@ EXIT:
 	return ret;
 }
 
+static void read_gatt_characteristic_finish_async(GObject *object, GAsyncResult *res, gpointer user_data) {
+	int status = GATTLIB_SUCCESS;
+	GVariant *out_value;
+	GError *error = NULL;
+	gsize buffer_len = 0;
+	const char *buffer = NULL;
+
+	OrgBluezGattCharacteristic1 *characteristic = (OrgBluezGattCharacteristic1*) object;
+	gatt_async_read_data_t *async_data = user_data;
+
+	org_bluez_gatt_characteristic1_call_read_value_finish(characteristic, &out_value, res, &error);
+
+	if (error != NULL) {
+		fprintf(stderr, "Failed to read DBus GATT characteristic: %s\n", error->message);
+		g_error_free(error);
+		status = GATTLIB_ERROR_DBUS;
+		goto EXIT;
+	}
+	buffer = g_variant_get_fixed_array(out_value, &buffer_len, sizeof(guchar));
+
+	g_variant_unref(out_value);
+
+EXIT:
+	async_data->cb(status, async_data->caller_user_data, buffer, buffer_len);
+	g_object_unref(object);
+	free(user_data);
+}
+
+static void read_gatt_characteristic_async(struct dbus_characteristic *dbus_characteristic, void *user_data, gatt_read_cb_t cb) {
+	// prepare necessary user_data
+	gatt_async_read_data_t *async_data = malloc(sizeof(gatt_async_read_data_t));
+	async_data->cb = cb;
+	async_data->caller_user_data = user_data;
+
+	GVariantBuilder *options =  g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+	org_bluez_gatt_characteristic1_call_read_value(
+			dbus_characteristic->gatt, g_variant_builder_end(options), NULL, read_gatt_characteristic_finish_async, async_data);
+	g_variant_builder_unref(options);
+}
+
 static int read_gatt_descriptor(struct dbus_characteristic *dbus_characteristic, void **buffer, size_t* buffer_len) {
 	GVariant *out_value;
 	GError *error = NULL;
@@ -352,6 +397,46 @@ static int read_gatt_descriptor(struct dbus_characteristic *dbus_characteristic,
 EXIT:
 	g_variant_unref(out_value);
 	return ret;
+}
+
+static void read_gatt_descriptor_finish_async(GObject *object, GAsyncResult *res, gpointer user_data) {
+	int status = GATTLIB_SUCCESS;
+	GVariant *out_value;
+	GError *error = NULL;
+	gsize buffer_len = 0;
+	const char *buffer = NULL;
+
+	OrgBluezGattDescriptor1 *descriptor = (OrgBluezGattDescriptor1*) object;
+	gatt_async_read_data_t *async_data = user_data;
+
+	org_bluez_gatt_descriptor1_call_read_value_finish(descriptor, &out_value, res, &error);
+
+	if (error != NULL) {
+		fprintf(stderr, "Failed to read DBus GATT descriptor: %s\n", error->message);
+		g_error_free(error);
+		status = GATTLIB_ERROR_DBUS;
+		goto EXIT;
+	}
+	buffer = g_variant_get_fixed_array(out_value, &buffer_len, sizeof(guchar));
+
+	g_variant_unref(out_value);
+
+EXIT:
+	async_data->cb(status, async_data->caller_user_data, buffer, buffer_len);
+	g_object_unref(object);
+	free(user_data);
+}
+
+static void read_gatt_descriptor_async(struct dbus_characteristic *dbus_characteristic, void *user_data, gatt_read_cb_t cb) {
+	// prepare necessary user_data
+	gatt_async_read_data_t *async_data = malloc(sizeof(gatt_async_read_data_t));
+	async_data->cb = cb;
+	async_data->caller_user_data = user_data;
+
+	GVariantBuilder *options =  g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+	org_bluez_gatt_descriptor1_call_read_value(
+			dbus_characteristic->desc, g_variant_builder_end(options), NULL, read_gatt_descriptor_finish_async, async_data);
+	g_variant_builder_unref(options);
 }
 
 #if BLUEZ_VERSION > BLUEZ_VERSIONS(5, 40)
@@ -395,6 +480,35 @@ int gattlib_read_by_handle_from_mac(void *adapter, const char *mac_address, uint
 	}
 }
 
+void gattlib_read_by_handle_from_mac_async(void* adapter, const char *mac_address, uint16_t handle, void *user_data, gatt_read_cb_t cb) {
+	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
+		cb(GATTLIB_NOT_CONNECTED, user_data, NULL, 0);
+		return;
+	}
+	if(!gattlib_is_services_resolved_from_mac(adapter, mac_address)) {
+		cb(GATTLIB_BUSY, user_data, NULL, 0);
+		return;
+	}
+	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
+	if (dbus_characteristic.type == TYPE_NONE) {
+		cb(GATTLIB_NOT_SUPPORTED, user_data, NULL, 0);
+	}
+#if BLUEZ_VERSION > BLUEZ_VERSIONS(5, 40)
+	else if (dbus_characteristic.type == TYPE_BATTERY_LEVEL) {
+		//return read_battery_level(&dbus_characteristic, buffer, buffer_len);
+		cb(GATTLIB_NOT_SUPPORTED, user_data, NULL, 0);
+	}
+#endif
+	else if (dbus_characteristic.type == TYPE_DESCRIPTOR) {
+		read_gatt_descriptor_async(&dbus_characteristic, user_data, cb);
+	} else if (dbus_characteristic.type != TYPE_GATT) {
+		cb(GATTLIB_NOT_SUPPORTED, user_data, NULL, 0);
+	} else {
+		read_gatt_characteristic_async(&dbus_characteristic, user_data, cb);
+	}
+}
+
+
 int gattlib_read_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, void **buffer, size_t *buffer_len) {
 	struct dbus_characteristic dbus_characteristic = get_characteristic_from_uuid(connection, uuid);
 	if (dbus_characteristic.type == TYPE_NONE) {
@@ -420,59 +534,19 @@ int gattlib_read_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, void 
 	}
 }
 
-int gattlib_read_char_by_uuid_async(gatt_connection_t* connection, uuid_t* uuid, gatt_read_cb_t gatt_read_cb) {
-	int ret = GATTLIB_SUCCESS;
-
-	struct dbus_characteristic dbus_characteristic = get_characteristic_from_uuid(connection, uuid);
-	if (dbus_characteristic.type == TYPE_NONE) {
-		return GATTLIB_NOT_FOUND;
+static void setWriteOptions(GVariantBuilder *variant_options, uint32_t options)
+{
+	switch(options & BLUEZ_GATT_WRITE_VALUE_TYPE_MASK) {
+		case BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE:
+			g_variant_builder_add(variant_options, "{sv}", "type", g_variant_new("s", "request"));
+			break;
+		case BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITHOUT_RESPONSE:
+			g_variant_builder_add(variant_options, "{sv}", "type", g_variant_new("s", "command"));
+			break;
+		case BLUEZ_GATT_WRITE_VALUE_TYPE_RELIABLE_WRITE:
+			g_variant_builder_add(variant_options, "{sv}", "type", g_variant_new("s", "reliable"));
+			break;
 	}
-#if BLUEZ_VERSION > BLUEZ_VERSIONS(5, 40)
-	else if (dbus_characteristic.type == TYPE_BATTERY_LEVEL) {
-		//TODO: Having 'percentage' as a 'static' is a limitation when we would support multiple connections
-		static uint8_t percentage;
-
-		percentage = org_bluez_battery1_get_percentage(dbus_characteristic.battery);
-
-		gatt_read_cb((const void*)&percentage, sizeof(percentage));
-
-		return GATTLIB_SUCCESS;
-	}
-#endif
-	else if(dbus_characteristic.type != TYPE_GATT) {
-		return GATTLIB_NOT_SUPPORTED;
-	}
-
-	GVariant *out_value;
-	GError *error = NULL;
-
-#if BLUEZ_VERSION < BLUEZ_VERSIONS(5, 40)
-	org_bluez_gatt_characteristic1_call_read_value_sync(
-		dbus_characteristic.gatt, &out_value, NULL, &error);
-#else
-	GVariantBuilder *options =  g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
-	org_bluez_gatt_characteristic1_call_read_value_sync(
-			dbus_characteristic.gatt, g_variant_builder_end(options), &out_value, NULL, &error);
-	g_variant_builder_unref(options);
-#endif
-	if (error != NULL) {
-		fprintf(stderr, "Failed to read DBus GATT characteristic: %s\n", error->message);
-		g_error_free(error);
-		ret = GATTLIB_ERROR_DBUS;
-		goto EXIT;
-	}
-
-	gsize n_elements;
-	gconstpointer const_buffer = g_variant_get_fixed_array(out_value, &n_elements, sizeof(guchar));
-	if (const_buffer) {
-		gatt_read_cb(const_buffer, n_elements);
-	}
-
-	g_object_unref(dbus_characteristic.gatt);
-	g_variant_unref(out_value);
-
-EXIT:
-	return ret;
 }
 
 static int write_char(struct dbus_characteristic *dbus_characteristic, const void* buffer, size_t buffer_len, uint32_t options)
@@ -481,18 +555,11 @@ static int write_char(struct dbus_characteristic *dbus_characteristic, const voi
 	GError *error = NULL;
 	int ret = GATTLIB_SUCCESS;
 
-#if BLUEZ_VERSION < BLUEZ_VERSIONS(5, 40)
-	org_bluez_gatt_characteristic1_call_write_value_sync(dbus_characteristic->gatt, value, NULL, &error);
-#else
 	GVariantBuilder *variant_options = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
-
-	if ((options & BLUEZ_GATT_WRITE_VALUE_TYPE_MASK) == BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITHOUT_RESPONSE) {
-		g_variant_builder_add(variant_options, "{sv}", "type", g_variant_new("s", "command"));
-	}
+	setWriteOptions(variant_options, options);
 
 	org_bluez_gatt_characteristic1_call_write_value_sync(dbus_characteristic->gatt, value, g_variant_builder_end(variant_options), NULL, &error);
 	g_variant_builder_unref(variant_options);
-#endif
 
 	if (error != NULL) {
 		fprintf(stderr, "Failed to write DBus GATT characteristic: %s\n", error->message);
@@ -508,6 +575,49 @@ static int write_char(struct dbus_characteristic *dbus_characteristic, const voi
 	return ret;
 }
 
+static void write_char_finish_async(GObject *object, GAsyncResult *res, gpointer user_data) {
+	int status = GATTLIB_SUCCESS;
+	GError *error = NULL;
+
+	OrgBluezGattCharacteristic1 *characteristic = (OrgBluezGattCharacteristic1*) object;
+	gatt_async_write_data_t *async_data = user_data;
+
+	org_bluez_gatt_characteristic1_call_write_value_finish(characteristic, res, &error);
+
+	if (error != NULL) {
+		fprintf(stderr, "Failed to read DBus GATT characteristic: %s\n", error->message);
+		g_error_free(error);
+		status = GATTLIB_ERROR_DBUS;
+		goto EXIT;
+	}
+
+EXIT:
+	async_data->cb(status, async_data->caller_user_data);
+	g_object_unref(object);
+	free(user_data);
+}
+
+static void write_char_async(struct dbus_characteristic *dbus_characteristic, const void* buffer, size_t buffer_len, uint32_t options, void* user_data, gatt_write_cb_t cb)
+{
+	// prepare necessary user_data
+	gatt_async_write_data_t *async_data = malloc(sizeof(gatt_async_write_data_t));
+	async_data->cb = cb;
+	async_data->caller_user_data = user_data;
+
+	GVariant *value = g_variant_new_from_data(G_VARIANT_TYPE ("ay"), buffer, buffer_len, TRUE, NULL, NULL);
+
+	GVariantBuilder *variant_options = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+	setWriteOptions(variant_options, options);
+
+	org_bluez_gatt_characteristic1_call_write_value(dbus_characteristic->gatt, value, g_variant_builder_end(variant_options), NULL, write_char_finish_async, async_data);
+	g_variant_builder_unref(variant_options);
+
+	//
+	// @note: No need to free `value` has it is freed by org_bluez_gatt_characteristic1_call_write_value_sync()
+	//        See: https://developer.gnome.org/gio/stable/GDBusProxy.html#g-dbus-proxy-call
+	//
+}
+
 static int write_desc(struct dbus_characteristic *dbus_characteristic, const void* buffer, size_t buffer_len, uint32_t options)
 {
 	GVariant *value = g_variant_new_from_data(G_VARIANT_TYPE ("ay"), buffer, buffer_len, TRUE, NULL, NULL);
@@ -515,10 +625,7 @@ static int write_desc(struct dbus_characteristic *dbus_characteristic, const voi
 	int ret = GATTLIB_SUCCESS;
 
 	GVariantBuilder *variant_options = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
-
-	if ((options & BLUEZ_GATT_WRITE_VALUE_TYPE_MASK) == BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITHOUT_RESPONSE) {
-		g_variant_builder_add(variant_options, "{sv}", "type", g_variant_new("s", "command"));
-	}
+	setWriteOptions(variant_options, options);
 
 	org_bluez_gatt_descriptor1_call_write_value_sync(dbus_characteristic->desc, value, g_variant_builder_end(variant_options), NULL, &error);
 	g_variant_builder_unref(variant_options);
@@ -536,6 +643,50 @@ static int write_desc(struct dbus_characteristic *dbus_characteristic, const voi
 
 	return ret;
 }
+
+static void write_desc_finish_async(GObject *object, GAsyncResult *res, gpointer user_data) {
+	int status = GATTLIB_SUCCESS;
+	GError *error = NULL;
+
+	OrgBluezGattDescriptor1 *descriptor = (OrgBluezGattDescriptor1*) object;
+	gatt_async_write_data_t *async_data = user_data;
+
+	org_bluez_gatt_descriptor1_call_write_value_finish(descriptor, res, &error);
+
+	if (error != NULL) {
+		fprintf(stderr, "Failed to read DBus GATT descriptor: %s\n", error->message);
+		g_error_free(error);
+		status = GATTLIB_ERROR_DBUS;
+		goto EXIT;
+	}
+
+EXIT:
+	async_data->cb(status, async_data->caller_user_data);
+	g_object_unref(object);
+	free(user_data);
+}
+
+static void write_desc_async(struct dbus_characteristic *dbus_characteristic, const void* buffer, size_t buffer_len, uint32_t options, void* user_data, gatt_write_cb_t cb)
+{
+	// prepare necessary user_data
+	gatt_async_write_data_t *async_data = malloc(sizeof(gatt_async_write_data_t));
+	async_data->cb = cb;
+	async_data->caller_user_data = user_data;
+
+	GVariant *value = g_variant_new_from_data(G_VARIANT_TYPE ("ay"), buffer, buffer_len, TRUE, NULL, NULL);
+
+	GVariantBuilder *variant_options = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+	setWriteOptions(variant_options, options);
+
+	org_bluez_gatt_descriptor1_call_write_value(dbus_characteristic->desc, value, g_variant_builder_end(variant_options), NULL, write_desc_finish_async, async_data);
+	g_variant_builder_unref(variant_options);
+
+	//
+	// @note: No need to free `value` has it is freed by org_bluez_gatt_descriptor1_call_write_value_sync()
+	//        See: https://developer.gnome.org/gio/stable/GDBusProxy.html#g-dbus-proxy-call
+	//
+}
+
 
 int gattlib_write_char_by_uuid(gatt_connection_t* connection, uuid_t* uuid, const void* buffer, size_t buffer_len)
 {
@@ -575,6 +726,27 @@ int gattlib_write_by_handle_from_mac(void *adapter, const char *mac_address, uin
 		int ret = write_char(&dbus_characteristic, buffer, buffer_len, BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE);
 		g_object_unref(dbus_characteristic.gatt);
 		return ret;
+	}
+}
+
+void gattlib_write_by_handle_from_mac_async(void *adapter, const char *mac_address, uint16_t handle, const void* buffer, size_t buffer_len, void *user_data, gatt_write_cb_t cb) {
+	if(!gattlib_is_connected_from_mac(adapter, mac_address)) {
+		cb(GATTLIB_NOT_CONNECTED, user_data);
+		return;
+	}
+	if(!gattlib_is_services_resolved_from_mac(adapter, mac_address)) {
+		cb(GATTLIB_BUSY, user_data);
+		return;
+	}
+	struct dbus_characteristic dbus_characteristic = get_characteristic_from_mac_and_handle(adapter, mac_address, handle);
+	if (dbus_characteristic.type == TYPE_NONE) {
+		cb(GATTLIB_NOT_FOUND, user_data);
+	} else if (dbus_characteristic.type == TYPE_DESCRIPTOR) {
+		write_desc_async(&dbus_characteristic, buffer, buffer_len, BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE, user_data, cb);
+	} else if (dbus_characteristic.type != TYPE_GATT) {
+		cb(GATTLIB_NOT_SUPPORTED, user_data);
+	} else {
+		write_char_async(&dbus_characteristic, buffer, buffer_len, BLUEZ_GATT_WRITE_VALUE_TYPE_WRITE_WITH_RESPONSE, user_data, cb);
 	}
 }
 
@@ -628,3 +800,4 @@ int gattlib_write_without_response_char_by_handle(gatt_connection_t* connection,
 	g_object_unref(dbus_characteristic.gatt);
 	return ret;
 }
+
