@@ -412,3 +412,4 @@ gboolean stop_scan_func(gpointer data)
 	g_main_loop_quit(data);
 	return FALSE;
 }
+

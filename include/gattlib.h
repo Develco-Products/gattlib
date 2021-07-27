@@ -344,6 +344,9 @@ int gattlib_adapter_scan_disable(void* adapter);
  */
 int gattlib_adapter_close(void* adapter);
 
+/* TBD */
+void gattlib_register_default_agent(void);
+
 /**
  * @brief Function to connect to a BLE device
  *
