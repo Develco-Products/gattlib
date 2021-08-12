@@ -1,7 +1,7 @@
 
 #include "gattlib_internal.h"
 
-static gchar agent_name[] = "/com/develcoproducts/smartammbluezble/agent";
+static gchar agent_name[] = "/com/dp/smartammbluezble/agent";
 static GDBusConnection *conn = NULL;
 
 static const GDBusArgInfo arg1_authorizeservice = {
@@ -173,104 +173,14 @@ const GDBusInterfaceInfo agent_iface_endpoint = {
 	NULL,
 };
 
-/* Handle agent calls .. Just returning doing nothing */
+/* dummy agent - don't reply to commands */
 static void agent_endpoint_method_call(GDBusConnection *conn, const gchar *sender,
 		const gchar *path, const gchar *interface, const gchar *method, GVariant *params,
 		GDBusMethodInvocation *invocation, void *userdata) {
-	GDBusMessage *reply;
-	GDBusMessage *msg;
-	GError *error = NULL;
-	GVariant *value;
-	(void)conn;
-	(void)sender;
-	(void)interface;
-	(void)params;
-	fprintf(stderr, "%s \n",interface);
-	fprintf(stderr, " &&&&&&&&&&&&&&&&&&&&& %s &&&&&&&&&&&&&&&&\n",method);
-	msg = g_dbus_method_invocation_get_message (invocation);
-	reply = g_dbus_message_new_method_reply (msg);
-
-	if(!strcmp(method,"Release"))
-		;
-	else if(!strcmp(method,"RequestPinCode")){
-		gchar *device;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o)",&device);	
-		fprintf(stderr, "device addr [%s] \n",device);
-		g_dbus_message_set_body(reply, g_variant_new("(s)","ABCD1234"));
-	}
-	else if(!strcmp(method,"DisplayPincode")) {
-		gchar *device,*pincode;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o&s)",&device,&pincode);	
-		fprintf(stderr, "device addr [%s] pincode [%s]\n",device,pincode);
-	}
-	else if(!strcmp(method,"RequestPassKey")){
-		gchar *device;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o)",&device);	
-		g_dbus_message_set_body(msg, g_variant_new("(u)",123456));
-	}
-	else if(!strcmp(method,"DisplayPasskey")) {
-		gchar *device;
-		guint32	passkey;
-		guint16 entered;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o&u&q)",&device,&passkey,&entered);	
-		fprintf(stderr, "device addr [%s] passkey [%d] entered [%d]\n",device,passkey,entered);
-	}
-	else if(!strcmp(method,"RequestConfirmation")){
-		gchar *device;
-		guint32 passkey;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o&u)",&device,&passkey);	
-		fprintf(stderr, "device addr [%s] pincode [%d]\n",device,passkey);
-	}
-	else if(!strcmp(method,"RequestAuthorization")){
-		gchar *device;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o)",&device);	
-		fprintf(stderr, "device addr [%s] \n",device);
-	}
-	else if(!strcmp(method,"AuthorizeService")){
-		gchar *device,*uuid;
-		value = g_dbus_method_invocation_get_parameters(invocation);
-		g_variant_get(value,"(&o&s)",&device,&uuid);	
-		fprintf(stderr, "device addr [%s] uuid [%s]\n",device,uuid);
-		//strcpy(pDeviceCan,device);
-	}
-	else if(!strcmp(method,"Cancel"))
-		;
-#if 0 
-	if (!strcmp(method, "AuthorizeService") || !strcmp(method, "RequestConfirmation") || !strcmp(method,"RequestAuthorization")){
-		fprintf(stderr, "sender %s \n",sender);
-		fprintf(stderr, "interface %s \n",interface);
-		fprintf(stderr, "---%s \n",g_dbus_method_invocation_get_method_name(invocation));
-		if(!strcmp(method,"RequestAuthorization")) {
-			value = g_dbus_method_invocation_get_parameters(invocation);
-			g_print ("type '%s'\n", g_variant_get_type_string (value));
-			g_variant_get(value,"(&o)",&device);	
-			fprintf(stderr, "device addr [%s] \n",device);
-		}
-#endif
-#if 0
-		if(g_dbus_connection_send_message (conn,reply,G_DBUS_SEND_MESSAGE_FLAGS_NONE,NULL, /* out_serial */&error) == 0){
-			fprintf(stderr, "returned error g_dbus_connection_send_message \n");	
-			fprintf(stderr, "error %s \n",error?error->message:NULL);
-		}
-#else
-		(void)error;
-#endif
-#if 0
-	}
-	else if (strcmp(method, "Cancel") == 0){
-		fprintf(stderr, "Cancel called \n");
-	}
-#endif
+	fprintf(stderr, "Agent called with command: %s\n",method);
 	g_object_unref(invocation);
 	return ;
 }
-
 
 static const GDBusInterfaceVTable endpoint_vtable = {
 	.method_call = agent_endpoint_method_call,
@@ -290,12 +200,8 @@ static void bus_acquired_handler(GDBusConnection *connection, const gchar *name,
 				(GDBusInterfaceInfo *)&agent_iface_endpoint, &endpoint_vtable,
 				NULL, endpoint_free, &error)) == 0){
 
-		fprintf(stderr, "g_dbus_connection_register_object returned error \n");
-		fprintf(stderr, "error is %s \n",error->message);
 		g_error_free(error);
 	}
-
-	fprintf(stderr, "############################ - %d\n", rid);
 }
 
 static void name_acquired_handler(GDBusConnection *connection, const gchar *name, gpointer user_data)
@@ -349,16 +255,5 @@ void gattlib_register_default_agent(void)
 		return;
 	}
 
-
-	guint r = g_bus_own_name(G_BUS_TYPE_SYSTEM, "com.develcoproducts.smartammbluezble.agent", G_BUS_NAME_OWNER_FLAGS_NONE, bus_acquired_handler, name_acquired_handler, name_lost_handler, NULL, NULL);
-	fprintf(stderr, "g_bus_own_name returned %d\n", r);
-
-/*	gchar *address = g_dbus_address_get_for_bus_sync(G_BUS_TYPE_SYSTEM, NULL, NULL);
-	fprintf(stderr, "address %s \n",address);
-
-	error = NULL;
-	conn =	g_dbus_connection_new_for_address_sync(address,
-			G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
-			G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
-			NULL, NULL, &error); */
+	g_bus_own_name(G_BUS_TYPE_SYSTEM, "com.dp.smartammbluezble.agent", G_BUS_NAME_OWNER_FLAGS_NONE, bus_acquired_handler, name_acquired_handler, name_lost_handler, NULL, NULL);
 }
