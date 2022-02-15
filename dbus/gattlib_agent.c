@@ -124,7 +124,7 @@ static const GDBusMethodInfo agent_iface_endpoint_RequestConfirmation = {
 	NULL,
 };
 static const GDBusMethodInfo agent_iface_endpoint_DisplayPasskey = {
-	-1, "DisplayPaskey",
+	-1, "DisplayPasskey",
 	(GDBusArgInfo **)in_DisplayPasskey,
 	NULL,
 	NULL,
