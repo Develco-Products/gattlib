@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, int_handler);
 
 	while(1) {
-		fgets(input, sizeof(input), stdin);
+		if( fgets(input, sizeof(input), stdin) ) {
 
 		// NUS TX can only receive 20 bytes at a time
 		input_ptr = input;
@@ -132,6 +132,7 @@ int main(int argc, char *argv[]) {
 				return 1;
 			}
 			input_ptr += length;
+		}
 		}
 	}
 

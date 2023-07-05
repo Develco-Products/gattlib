@@ -86,8 +86,10 @@ int gattlib_write_char_by_uuid_stream_open(gatt_connection_t* connection, uuid_t
 
 int gattlib_write_char_stream_write(gatt_stream_t *stream, const void *buffer, size_t buffer_len)
 {
-	write((unsigned long)stream, buffer, buffer_len);
-	return GATTLIB_SUCCESS;
+	if( buffer_len == write((unsigned long)stream, buffer, buffer_len) ) {
+		return GATTLIB_SUCCESS;
+	}
+	return GATTLIB_ERROR_DBUS;
 }
 
 int gattlib_write_char_stream_close(gatt_stream_t *stream)
