@@ -56,7 +56,26 @@ int gattlib_adapter_open(const char* adapter_name, void** adapter) {
 	}
 
 	// Ensure the adapter is powered on
-	org_bluez_adapter1_set_powered(adapter_proxy, TRUE);
+	GVariant *reply = g_dbus_proxy_call_sync(
+		G_DBUS_PROXY(adapter_proxy),
+		"org.freedesktop.DBus.Properties.Set",
+		g_variant_new("(ssv)",
+									"org.bluez.Adapter1",
+									"Powered",
+									g_variant_new_boolean(TRUE)),
+		G_DBUS_CALL_FLAGS_NONE,
+		5000,
+		NULL,
+		&error);
+
+	if (reply == NULL) {
+			fprintf(stderr, "Failed to power adapter %s: %s\n",
+							object_path, error->message);
+			g_clear_error(&error);
+			g_object_unref(adapter_proxy);
+			return GATTLIB_ERROR_DBUS;
+	}
+	g_variant_unref(reply);
 
 	gattlib_adapter = calloc(1, sizeof(struct gattlib_adapter));
 	if (gattlib_adapter == NULL) {
